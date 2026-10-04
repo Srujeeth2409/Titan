@@ -26,10 +26,17 @@ from app.core.security import (
     hash_refresh_token,
     verify_password,
 )
-from app.db.models import AuditLog, RefreshToken, User
+from app.db.models import (
+    AuditLog,
+    Organization,
+    RefreshToken,
+    User,
+    Workspace,
+)
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, SignupRequest, UserResponse
 from app.services.rate_limit import check_login_rate_limit, record_failed_login
+
 
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -99,8 +106,25 @@ async def signup(
         )
 
     hashed = hash_password(body.password)
+    # Create the user first so its UUID is available.
     user = User(email=body.email, hashed_password=hashed)
     db.add(user)
+    await db.flush()
+
+    # Create an organization for the new user.
+    organization = Organization(
+        name=f"{body.email}'s Organization"
+    )
+    db.add(organization)
+    await db.flush()
+
+    # Create the user's default workspace.
+    workspace = Workspace(
+        organization_id=organization.id,
+        created_by_user_id=user.id,
+        name="Default Workspace",
+    )
+    db.add(workspace)
     await db.flush()
 
     access = create_access_token(str(user.id), user.email)

@@ -1,6 +1,37 @@
-.env
-.venv/
+# Python
 __pycache__/
-*.pyc
-.DS_Store
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+.venv312/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE
 .idea/
+.vscode/
+
+# Build files
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+
+# Node
+node_modules/
+.next/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+# TypeScript build cache
+*.tsbuildinfo

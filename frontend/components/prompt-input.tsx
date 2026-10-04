@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRef, useState, useEffect, useCallback } from "react";
+import { cn } from "@/lib/utils";
 
 // ----------------------------------------------------------------------
 // Transition Physics
@@ -36,30 +37,15 @@ function MorphingText({ text }: { text: string }) {
 
   return (
     <span
-      style={{
-        position: "relative",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        width,
-        transition: "width 300ms cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-      }}
+      className="relative inline-flex items-center justify-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+      style={{ width }}
     >
-      <span ref={spanRef} style={{ visibility: "hidden", whiteSpace: "nowrap", padding: "0 4px" }}>
+      <span ref={spanRef} className="invisible whitespace-nowrap px-1">
         {text}
       </span>
       <span
         key={text}
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          whiteSpace: "nowrap",
-          animation: "pi-morph-in 300ms ease both",
-        }}
+        className="absolute inset-0 flex items-center justify-center whitespace-nowrap animate-in fade-in zoom-in-95 duration-300"
       >
         {text}
       </span>
@@ -67,7 +53,7 @@ function MorphingText({ text }: { text: string }) {
   );
 }
 
-function ModelIcon({ model, size = 14, opacity = 0.85 }: { model: string; size?: number; opacity?: number }) {
+function ModelIcon({ model, className }: { model: string; className?: string }) {
   const icons: Record<string, string> = {
     "Composer 2.5": "https://cdn.21st.dev/assets/mirror/7d/7dc00bc09f225fcda46cbc9c6b669c69c025a231877d6c17baa6a003f04f02b2.svg",
     "Gemini 3.5 Flash": "https://cdn.21st.dev/assets/mirror/cd/cda2df6631d5fa227de3fa04ed78cf354f910ba92a9f086e7455655c10ad9d09.svg",
@@ -76,22 +62,15 @@ function ModelIcon({ model, size = 14, opacity = 0.85 }: { model: string; size?:
     "GLM 5.2": "https://cdn.21st.dev/assets/mirror/b2/b2a6c0ff63efd8a555edf8a174ea6fcfeca120ac1595a2d461ca11d3ae89276c.svg"
   };
 
+  const filters: Record<string, string> = {
+    "GPT 5.5": "dark:invert",
+  };
+
   return (
     <img
       src={icons[model] || icons["GPT 5.5"]}
       alt={model}
-      width={size}
-      height={size}
-      draggable={false}
-      style={{
-        width: size,
-        height: size,
-        objectFit: "contain",
-        flexShrink: 0,
-        opacity,
-        // GPT's logo is dark by default; invert it for the dark UI
-        filter: model === "GPT 5.5" ? "invert(1)" : undefined,
-      }}
+      className={cn("object-contain", filters[model], className)}
     />
   );
 }
@@ -143,9 +122,9 @@ function DynamicBarsIcon({ level }: { level: string }) {
 
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <rect x="1.5" y="8" width="2.5" height="4.5" rx="1" fill="currentColor" style={{ transition: "opacity 300ms" }} opacity={1} />
-      <rect x="5.75" y="5" width="2.5" height="7.5" rx="1" fill="currentColor" style={{ transition: "opacity 300ms" }} opacity={isMediumOrHigh ? 1 : 0.3} />
-      <rect x="10" y="2" width="2.5" height="10.5" rx="1" fill="currentColor" style={{ transition: "opacity 300ms" }} opacity={isHigh ? 1 : 0.3} />
+      <rect x="1.5" y="8" width="2.5" height="4.5" rx="1" fill="currentColor" className="transition-opacity duration-300" opacity={1} />
+      <rect x="5.75" y="5" width="2.5" height="7.5" rx="1" fill="currentColor" className="transition-opacity duration-300" opacity={isMediumOrHigh ? 1 : 0.3} />
+      <rect x="10" y="2" width="2.5" height="10.5" rx="1" fill="currentColor" className="transition-opacity duration-300" opacity={isHigh ? 1 : 0.3} />
     </svg>
   );
 }
@@ -172,9 +151,9 @@ function AttachmentThumb({
   return (
     <button
       ref={(el) => {
-        btnRef.current = el;
-        registerRef(attachment.id, el);
-      }}
+          btnRef.current = el;
+          registerRef(attachment.id, el);
+    }}
       type="button"
       onMouseDown={(e) => e.preventDefault()}
       onMouseEnter={() => setIsHovered(true)}
@@ -197,9 +176,6 @@ function AttachmentThumb({
         outline: "none",
         cursor: "pointer",
         padding: 0,
-        animationName: "pi-thumb-in",
-        animationDuration: "350ms",
-        animationTimingFunction: "cubic-bezier(0.175, 0.885, 0.32, 1.275)",
         animationDelay: `${index * 35}ms`,
         animationFillMode: "backwards",
       }}
@@ -437,15 +413,68 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     const internalContainerRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const thumbRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
+    const attachmentsRef = useRef<Attachment[]>([]);
+
+useEffect(() => {
+  attachmentsRef.current = attachments;
+}, [attachments]);
+
+useEffect(() => {
+  return () => {
+    // Release attachment preview URLs
+    attachmentsRef.current.forEach((attachment) => {
+      URL.revokeObjectURL(attachment.url);
+    });
+
+    // Stop speech recognition
+    // Stop speech recognition without triggering callbacks during unmount
+    if (recognitionRef.current) {
+      const recognition = recognitionRef.current;
+
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+
+      try {
+        recognition.stop();
+      } catch {
+        // Recognition may already be stopped
+      }
+
+      recognitionRef.current = null;
+    }
+    // Stop microphone tracks
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+
+    // Close audio context
+    if (audioContextRef.current) {
+      void audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    // Cancel animation frame
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+
+    // Clear recording intervals
+    if (demoIntervalRef.current !== null) {
+      window.clearInterval(demoIntervalRef.current);
+      demoIntervalRef.current = null;
+    }
+
+    if (demoTextIntervalRef.current !== null) {
+      window.clearInterval(demoTextIntervalRef.current);
+      demoTextIntervalRef.current = null;
+    }
+  };
+}, []);
 
     useEffect(() => {
       valueRef.current = value;
     }, [value]);
-
-    const attachmentsRef = useRef<Attachment[]>([]);
-    useEffect(() => {
-      attachmentsRef.current = attachments;
-    }, [attachments]);
 
     const handleValueChange = useCallback((val: string) => {
       setIsSmoothResize(true);
@@ -486,14 +515,6 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       setIsRecording(false);
       setAudioData(new Array(5).fill(0));
     }, []);
-
-    // Release mic / audio context / blob URLs on unmount only
-    useEffect(() => {
-      return () => {
-        stopRecording();
-        attachmentsRef.current.forEach((a) => URL.revokeObjectURL(a.url));
-      };
-    }, [stopRecording]);
 
     const startRecording = useCallback(async () => {
       setIsSmoothResize(false);
@@ -620,10 +641,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     useEffect(() => {
       if (!textareaRef.current) return;
       const el = textareaRef.current;
-      const prevHeight = el.style.height;
-      el.style.height = "0px"; // collapse first so scrollHeight reflects the real content height
       const scrollHeight = el.scrollHeight;
-      el.style.height = prevHeight;
       const newHeight = Math.max(68, Math.min(scrollHeight, 160));
       setTextareaHeight(newHeight);
     }, [value, expanded]);
@@ -733,30 +751,13 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
             internalContainerRef.current = node;
           }}
           onBlur={handleBlur}
-          className={className}
+          className={cn("relative flex flex-col w-full", className)}
           style={{
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            width: "100%",
-            margin: "0 auto",
             maxWidth: expanded ? 480 : 320,
             transition: isSmoothResize ? "max-width 0.15s ease-out" : "max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
             fontFamily: '"Reference Sans", Arial, sans-serif',
           }}
         >
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
-                @keyframes pi-morph-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-                @keyframes pi-thumb-in { from { opacity: 0; transform: translateY(-12px) scale(0.9); } to { opacity: 1; transform: none; } }
-                .pi-textarea::placeholder { color: rgba(255,255,255,0.55); font-weight: 500; }
-                .pi-textarea::-webkit-scrollbar { width: 4px; background: transparent; }
-                .pi-textarea::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
-              `,
-            }}
-          />
-
           <input
             ref={fileInputRef}
             type="file"
@@ -860,10 +861,8 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
               }}
               placeholder={placeholder}
               aria-label="Prompt"
-              className="pi-textarea"
               disabled={isRecording}
               style={{
-                overflowY: textareaHeight >= 160 ? "auto" : "hidden",
                 position: "absolute",
                 top: 0,
                 left: 0,
@@ -957,7 +956,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                   }}
                   aria-label={`Select model. Current: ${selectedModel}`}
                 >
-                  <ModelIcon model={selectedModel} opacity={0.85} />
+                  <ModelIcon model={selectedModel} className="size-3.5 opacity-70 group-hover:opacity-100 transition-opacity" />
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>
                     <MorphingText text={selectedModel} />
                   </span>
@@ -1008,7 +1007,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                           transition: "background 150ms ease",
                         }}
                       >
-                        <ModelIcon model={model} opacity={0.9} />
+                        <ModelIcon model={model} className="size-3.5 opacity-85" />
                         <span>{model}</span>
                       </button>
                     ))}

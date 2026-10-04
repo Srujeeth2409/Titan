@@ -157,3 +157,30 @@ export async function askStream(
 }
 
 export { API_URL };
+// ---- Authentication ----
+
+export async function signup(email: string, password: string) {
+  return apiFetch(`${API_URL}/v1/auth/signup`, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function login(email: string, password: string) {
+  return apiFetch(`${API_URL}/v1/auth/login`, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function getMe() {
+  return apiFetch(`${API_URL}/v1/auth/me`, {
+    method: "GET",
+  });
+}
+
+export async function logout() {
+  return apiFetch(`${API_URL}/v1/auth/logout`, {
+    method: "POST",
+  });
+}

@@ -37,20 +37,6 @@ export default function HomePage() {
           --card-width: clamp(150px, 18.96vh, 215px);
         }
 
-        /* Dark theme tokens for the chatbox (used by Tailwind: bg-card, border-border, ...) */
-        .vantage-prompt {
-          --background: 0 0% 0%;
-          --foreground: 0 0% 98%;
-          --card: 0 0% 8%;
-          --muted: 0 0% 12%;
-          --muted-foreground: 0 0% 65%;
-          --accent: 0 0% 18%;
-          --border: 0 0% 22%;
-          --ring: 0 0% 70%;
-          --primary: 0 0% 100%;
-          --primary-foreground: 0 0% 7%;
-        }
-
         .vignette-overlay {
           background:
             linear-gradient(180deg, rgba(0,0,0,.03), transparent 24%, transparent 82%, rgba(0,0,0,.05)),
@@ -200,6 +186,7 @@ export default function HomePage() {
                   Home
                   <span
                     style={{
+                      content: "''",
                       position: "absolute",
                       bottom: "-8px",
                       left: 0,
@@ -299,26 +286,22 @@ export default function HomePage() {
             </div>
           </header>
 
-          {/* ── CENTER ALIGNED CHATBOX ──
-              The wrapper is anchored by its top edge (not centered on both axes) so the
-              collapsed pill sits in the middle of the screen and expands downward
-              instead of jumping around while you type. */}
+          {/* ── CENTER ALIGNED CHATBOX MOCK-UP ── */}
           <div
-            className="dark vantage-prompt"
             style={{
               position: "absolute",
               left: "50%",
-              top: "calc(50% - 24px)",
-              transform: "translateX(-50%)",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
               zIndex: 20,
-              width: "min(480px, calc(100% - 32px))",
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
             }}
           >
             <PromptInput
-              className="mx-auto"
               placeholder="Ask anything"
               onSubmit={(query, meta) => {
-                // UI-only for now: model and effort selectors are visual
                 alert(`Prompt submitted: "${query}" with model ${meta.model} (${meta.effort})`);
               }}
             />
@@ -342,8 +325,8 @@ export default function HomePage() {
               style={{
                 fontSize: "var(--display-size)",
                 lineHeight: "var(--display-leading)",
-                margin: 0,
                 marginBottom: "var(--title-copy-gap)",
+                margin: 0,
               }}
             >
               <span style={{ display: "block", overflow: "hidden" }}>
@@ -362,6 +345,7 @@ export default function HomePage() {
               style={{
                 fontSize: "var(--copy-size)",
                 lineHeight: "var(--copy-leading)",
+                marginBottom: "var(--copy-cta-gap)",
                 position: "relative",
                 left: "1px",
                 width: "clamp(390px, 31.67vw, 500px)",

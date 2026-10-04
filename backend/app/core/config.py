@@ -8,13 +8,20 @@ across the platform and is trivially overridable per-environment
 (dev / staging / prod) or per-tenant in future multi-tenant deployments.
 """
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    PROJECT_ROOT: ClassVar[Path] = Path(__file__).resolve().parents[3]
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        extra="ignore",
+    )
 
     environment: Literal["development", "staging", "production"] = "development"
     app_name: str = "Titan"
@@ -55,7 +62,7 @@ class Settings(BaseSettings):
     # Retrieval defaults — tunable per experiment via the Experiment
     # Management service without redeploying.
     default_chunk_strategy: str = "recursive"
-    default_embedding_model: str = "bge-base-en-v1.5"
+    default_embedding_model: str = "BAAI/bge-small-en-v1.5"
     default_top_k: int = 20
     default_rerank_top_n: int = 6
 

@@ -38,12 +38,25 @@ class Organization(Base):
 
 class Workspace(Base):
     __tablename__ = "workspaces"
-    id: Mapped[uuid.UUID] = uuid_pk()
-    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
-    name: Mapped[str] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    organization: Mapped[Organization] = relationship(back_populates="workspaces")
+    id: Mapped[uuid.UUID] = uuid_pk()
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id")
+    )
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )
+
+    organization: Mapped[Organization] = relationship(
+        back_populates="workspaces"
+    )
+    created_by: Mapped["User"] = relationship(
+        back_populates="workspaces"
+    )
 
 
 class User(Base):
@@ -62,6 +75,9 @@ class User(Base):
     )
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
+    workspaces: Mapped[list["Workspace"]] = relationship(
+        back_populates="created_by"
+    )
 
 
 class RefreshToken(Base):
@@ -84,6 +100,9 @@ class RefreshToken(Base):
 class Document(Base):
     __tablename__ = "documents"
     id: Mapped[uuid.UUID] = uuid_pk()
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id"), index=True
+    )
     filename: Mapped[str] = mapped_column(String(512))
     source_type: Mapped[str] = mapped_column(String(50))
     collection: Mapped[str] = mapped_column(String(255), default="default")
@@ -97,6 +116,7 @@ class Document(Base):
     )
 
     chunks: Mapped[list["Chunk"]] = relationship(back_populates="document")
+    workspace: Mapped["Workspace"] = relationship()
 
 
 class Chunk(Base):
