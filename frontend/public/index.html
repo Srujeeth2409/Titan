@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="en" class="motion-pending">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <title>Stop Digging Through Dashboards</title>
+
+  <script>
+    // Immediate motion initialization with fallback timeout
+    document.documentElement.classList.add('motion-pending');
+    var motionFallbackTimer = setTimeout(function() {
+      document.documentElement.classList.remove('motion-pending');
+    }, 3500);
+  </script>
+
+  <style>
+    /* ================================================================
+       FONTS & BASE TOKENS
+       ================================================================ */
+    @font-face {
+      font-family: "Reference Sans";
+      src: local("Reference Sans"), local("-apple-system"), local("BlinkMacSystemFont"), local("Segoe UI"), local("Arial");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Reference Display";
+      src: local("Reference Display"), local("Reference Sans"), local("-apple-system"), local("BlinkMacSystemFont"), local("Arial");
+      font-weight: 400 900;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      font-family: "Reference Sans", Arial, sans-serif;
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000000;
+      color: #ffffff;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ================================================================
+       VIEWPORT & SCREEN ARCHITECTURE
+       ================================================================ */
+    .viewport {
+      position: fixed;
+      inset: 0;
+      isolation: isolate;
+      background: #000;
+      overflow: hidden;
+    }
+
+    .screen {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+
+      /* Desktop CSS variables (Exact) */
+      --gutter-start: clamp(36px, 4.177vw, 96px);
+      --gutter-end: clamp(36px, 4.04vw, 96px);
+      --header-top: clamp(20px, 2.264vh, 30px);
+      --hero-bottom: clamp(34px, 5.19vh, 64px);
+      --display-size: clamp(58px, 7.64vh, 88px);
+      --display-leading: clamp(72px, 9.34vh, 106px);
+      --copy-size: clamp(14px, 1.70vh, 19px);
+      --copy-leading: clamp(19px, 2.17vh, 24px);
+      --title-copy-gap: clamp(15px, 2.08vh, 24px);
+      --copy-cta-gap: clamp(24px, 3.11vh, 36px);
+      --cta-width: clamp(142px, 15.09vh, 168px);
+      --cta-height: clamp(38px, 3.96vh, 44px);
+      --compact-control-font-size: clamp(17px, 1.75vh, 19px);
+      --action-control-font-size: clamp(17px, 1.78vh, 19.5px);
+      --primary-control-font-size: clamp(17px, 1.77vh, 19.25px);
+      --control-inline-nudge: -1px;
+      --control-baseline-shift: clamp(1px, .19vh, 2px);
+      --copy-optical-shift: clamp(0px, .1vh, 1px);
+      --watch-baseline-shift: clamp(2px, .38vh, 4px);
+      --card-width: clamp(150px, 18.96vh, 215px);
+    }
+
+    /* Background video & vignette */
+    .background {
+      position: absolute;
+      inset: 0;
+      z-index: -3;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,.03), transparent 24%, transparent 82%, rgba(0,0,0,.05)),
+        radial-gradient(ellipse at 44% 54%, transparent 30%, rgba(0,0,0,.055) 100%);
+    }
+
+    /* ================================================================
+       HEADER (TOP BAR)
+       ================================================================ */
+    .header {
+      position: absolute;
+      inset: var(--header-top) var(--gutter-end) auto var(--gutter-start);
+      height: 48px;
+      display: flex;
+      align-items: flex-start;
+      white-space: nowrap;
+      z-index: 10;
+    }
+
+    .brand {
+      position: relative;
+      top: 10px;
+      display: inline-block;
+      width: 25px;
+      height: 25px;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,.3));
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+
+    .brand svg {
+      width: 25px;
+      height: 25px;
+      display: block;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: flex-start;
+      width: 100%;
+    }
+
+    .nav {
+      margin-left: clamp(36px, 3.03vw, 48px);
+      gap: clamp(32px, 2.9vw, 43px);
+      position: relative;
+      top: 9px;
+      display: flex;
+    }
+
+    .nav a {
+      font-size: 16px;
+      font-weight: 430;
+      letter-spacing: -.36px;
+      color: rgba(229,229,230,.77);
+      text-shadow: 0 1px 3px rgba(0,0,0,.55);
+      text-decoration: none;
+      position: relative;
+      transition: filter 140ms ease, opacity 140ms ease, color 140ms ease;
+    }
+
+    .nav a:first-child {
+      position: relative;
+      top: -3px;
+    }
+
+    .nav a:nth-child(4) {
+      margin-left: 1px;
+    }
+
+    .nav a.active {
+      color: #ffffff;
+    }
+
+    .nav a.active::after {
+      content: "";
+      position: absolute;
+      bottom: -8px;
+      left: 0;
+      width: 44px;
+      height: 2px;
+      background: rgba(255,255,255,.82);
+      border-radius: 1px;
+    }
+
+    .time-panel {
+      margin-left: auto;
+      width: 211px;
+      height: 48px;
+      padding-left: 8px;
+      border-left: 2px solid rgba(230,230,230,.52);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      user-select: none;
+    }
+
+    .time-panel .label {
+      font-size: 15px;
+      font-weight: 420;
+      color: rgba(240,240,240,.77);
+      line-height: 1.2;
+    }
+
+    .time-panel .value {
+      font-size: 15px;
+      font-weight: 440;
+      color: rgba(255,255,255,.93);
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .sign-up {
+      width: 109px;
+      height: 42px;
+      border-radius: 7px;
+      background: #ffffff;
+      color: #101010;
+      font-weight: 460;
+      letter-spacing: -.34px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-family: inherit;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 1px 5px rgba(0,0,0,.34);
+      margin-left: clamp(20px, 1.95vw, 29px);
+      text-decoration: none;
+      transition: filter 140ms ease, opacity 140ms ease, background-color 140ms ease;
+    }
+
+    .sign-up:hover, .primary-cta:hover {
+      filter: brightness(1.08);
+    }
+
+    .menu-toggle {
+      display: none;
+      width: 46px;
+      height: 46px;
+      border-radius: 11px;
+      background: linear-gradient(145deg, rgba(26,34,36,.86), rgba(16,29,33,.9));
+      border: 1px solid rgba(255,255,255,.21);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #ffffff;
+      margin-left: auto;
+    }
+
+    /* ================================================================
+       HERO (BOTTOM-LEFT)
+       ================================================================ */
+    .hero-content {
+      position: absolute;
+      left: var(--gutter-start);
+      bottom: var(--hero-bottom);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      z-index: 5;
+      user-select: none;
+    }
+
+    .hero-title {
+      font-family: "Reference Display", "Reference Sans", Arial, sans-serif;
+      font-weight: 500;
+      font-optical-sizing: auto;
+      letter-spacing: -2.1px;
+      -webkit-text-stroke: .12px currentColor;
+      white-space: nowrap;
+      text-shadow: 0 2px 2px rgba(0,0,0,.44);
+      font-size: var(--display-size);
+      line-height: var(--display-leading);
+      margin-bottom: var(--title-copy-gap);
+    }
+
+    .line {
+      display: block;
+      transform-origin: left center;
+      overflow: hidden;
+    }
+
+    .line-one {
+      transform: scaleX(.775);
+      color: #ffffff;
+    }
+
+    .line-two {
+      transform: scaleX(.793);
+      color: rgba(211, 207, 207, .78);
+    }
+
+    .line-reveal {
+      display: block;
+    }
+
+    .hero-copy {
+      font-size: var(--copy-size);
+      line-height: var(--copy-leading);
+      margin-bottom: var(--copy-cta-gap);
+      position: relative;
+      left: 1px;
+      width: clamp(390px, 31.67vw, 500px);
+      color: rgba(226, 229, 228, .84);
+      font-weight: 350;
+      letter-spacing: .13px;
+      text-shadow: 0 1px 3px rgba(0,0,0,.7);
+    }
+
+    .primary-cta {
+      position: relative;
+      width: var(--cta-width);
+      height: var(--cta-height);
+      border-radius: 7px;
+      background: #ffffff;
+      color: #111111;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 1px 5px rgba(0,0,0,.38);
+      font-size: var(--primary-control-font-size);
+      font-family: inherit;
+      overflow: hidden;
+      display: inline-block;
+      text-decoration: none;
+      transition: filter 140ms ease, opacity 140ms ease;
+    }
+
+    .primary-cta .label {
+      position: absolute;
+      left: 8.125%;
+      top: 50%;
+      transform: translateY(calc(-50% + var(--control-baseline-shift)));
+      font-weight: 450;
+      letter-spacing: -.3px;
+      white-space: nowrap;
+    }
+
+    .primary-cta .arrow-box {
+      position: absolute;
+      right: 3.125%;
+      top: 14.286%;
+      width: 20.625%;
+      height: 71.429%;
+      border-radius: 7px;
+      background: #070909;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .primary-cta .arrow-box svg {
+      width: 14px;
+      height: 14px;
+      stroke: #ffffff;
+    }
+
+    /* ================================================================
+       DEMO CARD (BOTTOM-RIGHT) — GLASS
+       ================================================================ */
+    .demo-card {
+      position: absolute;
+      right: var(--gutter-end);
+      bottom: var(--hero-bottom);
+      width: var(--card-width);
+      aspect-ratio: 201 / 265;
+      container-type: inline-size;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: clamp(12px, 1.52vh, 18px);
+      background: linear-gradient(145deg, rgba(24,22,20,.80), rgba(5,12,14,.86));
+      box-shadow:
+        0 2px 10px rgba(0,0,0,.44),
+        0 0 0 3px rgba(255,255,255,.035) inset,
+        0 0 0 1px rgba(0,0,0,.9);
+      backdrop-filter: blur(14px) saturate(108%);
+      -webkit-backdrop-filter: blur(14px) saturate(108%);
+      z-index: 5;
+      box-sizing: border-box;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .demo-visual {
+      position: absolute;
+      left: 3.5cqw;
+      top: 4cqw;
+      width: 92.5cqw;
+      height: 92cqw;
+      border-radius: 4cqw;
+      background: #101a1e;
+      overflow: hidden;
+    }
+
+    .demo-visual img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(.89) saturate(.93) contrast(1.03);
+      display: block;
+    }
+
+    .demo-visual .play {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 29cqw;
+      height: 29cqw;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,.34);
+      background: rgba(3,5,7,.47);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      color: #ffffff;
+      transition: filter 140ms ease, transform 140ms ease;
+    }
+
+    .demo-visual .play:hover {
+      filter: brightness(1.15);
+      transform: translate(-50%, -50%) scale(1.06);
+    }
+
+    .demo-visual .play svg {
+      width: 38%;
+      height: 38%;
+      margin-left: 2px;
+      fill: #ffffff;
+    }
+
+    .watch-button {
+      position: absolute;
+      left: 3.5cqw;
+      bottom: 4cqw;
+      width: 92.5cqw;
+      height: 18.5cqw;
+      border-radius: 4cqw;
+      background: linear-gradient(145deg, rgba(26,34,36,.86), rgba(16,29,33,.9));
+      border: 1px solid rgba(255,255,255,.21);
+      color: #ffffff;
+      font-weight: 430;
+      font-size: clamp(11px, 7.5cqw, 15px);
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: filter 140ms ease;
+    }
+
+    .watch-button:hover {
+      filter: brightness(1.08);
+    }
+
+    /* ================================================================
+       CENTER ALIGNED CHATBOX MOCKUP (Exact PromptInput Spec)
+       ================================================================ */
+    .center-chatbox-container {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 320px;
+      transition: max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      font-family: "Reference Sans", Arial, sans-serif;
+    }
+
+    .center-chatbox-container.expanded {
+      max-width: 480px;
+    }
+
+    /* Slide-up Attachment Tab */
+    .chatbox-attachment-tab {
+      width: 100%;
+      position: relative;
+      z-index: 0;
+      overflow: hidden;
+      height: 0;
+      transition: height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .center-chatbox-container.has-attachments.expanded .chatbox-attachment-tab {
+      height: 68px;
+    }
+
+    .chatbox-attachment-drawer {
+      position: absolute;
+      bottom: -8px;
+      left: 20px;
+      right: 20px;
+      height: 68px;
+      transform: translateY(100%);
+      opacity: 0;
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease-out;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-bottom: none;
+      background: rgba(24, 24, 28, 0.95);
+      border-radius: 16px 16px 0 0;
+      padding: 8px 8px 4px 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .center-chatbox-container.has-attachments.expanded .chatbox-attachment-drawer {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Main Chatbox Card */
+    .chatbox-card {
+      position: relative;
+      width: 100%;
+      height: 48px;
+      border-radius: 24px;
+      background: rgba(18, 18, 22, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(20px) saturate(110%);
+      -webkit-backdrop-filter: blur(20px) saturate(110%);
+      z-index: 10;
+      overflow: hidden;
+      cursor: default;
+      transition: height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .center-chatbox-container.expanded .chatbox-card {
+      height: 116px;
+      overflow: visible;
+      cursor: text;
+      border-color: rgba(255, 255, 255, 0.24);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    }
+
+    .chatbox-placeholder-btn {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      padding: 15px 48px 15px 16px;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 17px;
+      color: rgba(255, 255, 255, 0.65);
+      background: transparent;
+      border: none;
+      outline: none;
+      cursor: text;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .center-chatbox-container.expanded .chatbox-placeholder-btn {
+      opacity: 0;
+      transform: scale(1.05) translateY(4px);
+      pointer-events: none;
+    }
+
+    .chatbox-textarea {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1;
+      width: 100%;
+      height: 68px;
+      resize: none;
+      background: transparent;
+      padding: 14px 48px 14px 16px;
+      font-size: 14px;
+      line-height: 22px;
+      color: #ffffff;
+      outline: none;
+      border: none;
+      font-family: inherit;
+      opacity: 0;
+      transform: scale(0.95) translateY(-4px);
+      pointer-events: none;
+      transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+    }
+
+    .chatbox-textarea::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 500;
+    }
+
+    .center-chatbox-container.expanded .chatbox-textarea {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Bottom controls in chatbox */
+    .chatbox-bottom-actions {
+      position: absolute;
+      bottom: 8px;
+      left: 12px;
+      right: 48px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      opacity: 0;
+      filter: blur(4px);
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .center-chatbox-container.expanded .chatbox-bottom-actions {
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .chatbox-pill-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 9999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.7);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .chatbox-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+
+    .chatbox-model-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #22c55e;
+      display: inline-block;
+    }
+
+    /* Dropdown menu */
+    .chatbox-model-menu {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 0;
+      width: 176px;
+      background: rgba(22, 22, 26, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 4px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(16px);
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      z-index: 100;
+    }
+
+    .chatbox-model-menu.open {
+      display: flex;
+    }
+
+    .chatbox-model-menu button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.8);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      text-align: left;
+      transition: background 0.15s ease;
+    }
+
+    .chatbox-model-menu button:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+    }
+
+    .chatbox-action-circle {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      background: #ffffff;
+      color: #000000;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      outline: none;
+      transition: transform 0.2s ease, background-color 0.2s ease;
+    }
+
+    .chatbox-action-circle:hover {
+      transform: scale(1.05);
+    }
+
+    /* Wave visualizer */
+    .chatbox-audio-wave {
+      position: absolute;
+      right: 48px;
+      bottom: 8px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 3px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .chatbox-audio-wave.recording {
+      opacity: 1;
+    }
+
+    .wave-bar {
+      width: 3px;
+      border-radius: 9999px;
+      background: #ffffff;
+      height: 6px;
+      animation: wavePulse 0.6s ease-in-out infinite alternate;
+    }
+
+    .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.6s; }
+
+    @keyframes wavePulse {
+      from { height: 4px; }
+      to { height: 22px; }
+    }
+
+    /* ================================================================
+       ENTRANCE MOTION CHOREOGRAPHY (Exact Timings & Delays)
+       ================================================================ */
+    @keyframes entrance-brand {
+      from { opacity: 0; transform: translateY(7px) scale(0.94); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes entrance-nav {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes entrance-action {
+      from { opacity: 0; transform: translateY(8px) scale(0.985); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes entrance-line {
+      from { transform: translate3d(0, 110%, 0) skewY(2deg); opacity: 0; }
+      to { transform: translate3d(0, 0, 0) skewY(0deg); opacity: 1; }
+    }
+
+    @keyframes entrance-copy {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes entrance-card {
+      from { opacity: 0; transform: translateY(12px) scale(0.968); transform-origin: 82% 50%; }
+      to { opacity: 1; transform: translateY(0) scale(1); transform-origin: 82% 50%; }
+    }
+
+    @keyframes entrance-chat {
+      from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)) scale(0.97); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    /* Initial state while motion is pending */
+    .motion-pending .brand {
+      opacity: 0;
+      animation: entrance-brand 580ms cubic-bezier(.16,1,.3,1) forwards 60ms;
+    }
+
+    .motion-pending .nav a:nth-child(1) {
+      opacity: 0;
+      animation: entrance-nav 480ms cubic-bezier(.16,1,.3,1) forwards 130ms;
+    }
+    .motion-pending .nav a:nth-child(2) {
+      opacity: 0;
+      animation: entrance-nav 480ms cubic-bezier(.16,1,.3,1) forwards 175ms;
+    }
+    .motion-pending .nav a:nth-child(3) {
+      opacity: 0;
+      animation: entrance-nav 480ms cubic-bezier(.16,1,.3,1) forwards 220ms;
+    }
+    .motion-pending .nav a:nth-child(4) {
+      opacity: 0;
+      animation: entrance-nav 480ms cubic-bezier(.16,1,.3,1) forwards 265ms;
+    }
+
+    .motion-pending .time-panel {
+      opacity: 0;
+      animation: entrance-nav 520ms cubic-bezier(.16,1,.3,1) forwards 180ms;
+    }
+
+    .motion-pending .sign-up {
+      opacity: 0;
+      animation: entrance-action 520ms cubic-bezier(.16,1,.3,1) forwards 220ms;
+    }
+
+    .motion-pending .menu-toggle {
+      opacity: 0;
+      animation: entrance-action 520ms cubic-bezier(.16,1,.3,1) forwards 140ms;
+    }
+
+    .motion-pending .line-one .line-reveal {
+      animation: entrance-line 800ms cubic-bezier(.22,1,.36,1) forwards 300ms;
+    }
+
+    .motion-pending .line-two .line-reveal {
+      animation: entrance-line 850ms cubic-bezier(.22,1,.36,1) forwards 440ms;
+    }
+
+    .motion-pending .center-chatbox-container {
+      opacity: 0;
+      animation: entrance-chat 700ms cubic-bezier(.16,1,.3,1) forwards 600ms;
+    }
+
+    .motion-pending .hero-copy {
+      opacity: 0;
+      animation: entrance-copy 620ms cubic-bezier(.16,1,.3,1) forwards 740ms;
+    }
+
+    .motion-pending .primary-cta {
+      opacity: 0;
+      animation: entrance-action 560ms cubic-bezier(.16,1,.3,1) forwards 960ms;
+    }
+
+    .motion-pending .demo-card {
+      opacity: 0;
+      animation: entrance-card 920ms cubic-bezier(.22,1,.36,1) forwards 1040ms;
+    }
+
+    /* Accessibility */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0.01ms !important;
+      }
+      .motion-pending * {
+        opacity: 1 !important;
+        transform: none !important;
+      }
+    }
+
+    :focus-visible {
+      outline: 2px solid #ffffff;
+      outline-offset: 3px;
+    }
+
+    /* ================================================================
+       RESPONSIVE BREAKPOINTS
+       ================================================================ */
+    @media (min-width: 620px) and (max-width: 790px),
+           (min-width: 620px) and (max-width: 1100px) and (orientation: portrait) {
+      .menu-toggle {
+        display: flex;
+      }
+      .header-actions {
+        position: absolute;
+        top: 56px;
+        right: 0;
+        width: min(324px, calc(100vw - 2 * var(--gutter-start)));
+        background: linear-gradient(145deg, rgba(20, 24, 28, 0.95), rgba(10, 16, 20, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 16px;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+        flex-direction: column;
+        padding: 24px;
+        gap: 20px;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-8px) scale(0.985);
+        transition: all 0.25s cubic-bezier(.16,1,.3,1);
+      }
+      .header.menu-open .header-actions {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0) scale(1);
+      }
+      .nav {
+        flex-direction: column;
+        margin-left: 0;
+        gap: 16px;
+        top: 0;
+      }
+      .time-panel {
+        margin-left: 0;
+        border-left: none;
+        border-top: 1px solid rgba(255,255,255,0.12);
+        padding-left: 0;
+        padding-top: 14px;
+        width: 100%;
+        height: auto;
+      }
+      .sign-up {
+        margin-left: 0;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 619px) {
+      .menu-toggle {
+        display: flex;
+      }
+      .header-actions {
+        position: absolute;
+        top: 56px;
+        right: 0;
+        width: min(340px, calc(100vw - 32px));
+        background: linear-gradient(145deg, rgba(20, 24, 28, 0.95), rgba(10, 16, 20, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 16px;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        flex-direction: column;
+        padding: 20px;
+        gap: 18px;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-8px) scale(0.985);
+        transition: all 0.25s cubic-bezier(.16,1,.3,1);
+      }
+      .header.menu-open .header-actions {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0) scale(1);
+      }
+      .nav {
+        flex-direction: column;
+        margin-left: 0;
+        gap: 14px;
+        top: 0;
+      }
+      .time-panel {
+        margin-left: 0;
+        border-left: none;
+        border-top: 1px solid rgba(255,255,255,0.12);
+        padding-left: 0;
+        padding-top: 12px;
+        width: 100%;
+        height: auto;
+      }
+      .sign-up {
+        margin-left: 0;
+        width: 100%;
+      }
+      .line-one {
+        transform: scaleX(.78);
+      }
+      .line-two {
+        transform: scaleX(.55);
+      }
+      .hero-copy br {
+        display: none;
+      }
+      .demo-card {
+        top: clamp(176px, 32svh, 300px);
+        bottom: auto;
+        right: var(--gutter-end);
+        width: clamp(130px, 35vw, 170px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="viewport">
+    <section class="screen" id="screen">
+      <!-- Background Video -->
+      <video class="background" autoplay muted loop playsinline disablepictureinpicture aria-hidden="true">
+        <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260808_064556_051587f1-74a1-4336-8c05-4dde3594ed05.mp4" type="video/mp4">
+      </video>
+
+      <!-- Header Top Bar -->
+      <header class="header" id="header">
+        <a href="/" class="brand" aria-label="Vantage home">
+          <svg viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <clipPath id="brand-disc"><circle cx="12.5" cy="12.5" r="12.5"/></clipPath>
+            <g clip-path="url(#brand-disc)">
+              <rect width="25" height="25" fill="#ededed"/>
+              <path d="M12.5 0 L25 12.5 L12.5 25 Z" fill="#050606"/>
+              <path d="M0 12.5 L12.5 0 L12.5 12.5 Z" fill="#737778"/>
+              <path d="M12.5 12.5 L25 12.5 L12.5 25 Z" fill="#fafafa" opacity="0.85"/>
+              <path d="M0 12.5 L12.5 12.5 L6.25 25 Z" fill="#0a0b0b"/>
+              <polygon points="12.5,4 18,12.5 12.5,21 7,12.5" fill="#ffffff"/>
+              <polygon points="12.5,7 15.5,12.5 12.5,18 9.5,12.5" fill="#0a0b0b"/>
+            </g>
+          </svg>
+        </a>
+
+        <div class="header-actions" id="tablet-navigation">
+          <nav class="nav">
+            <a href="/" class="active">Home</a>
+            <a href="#about">About</a>
+            <a href="#services">Services</a>
+            <a href="#contact">Contact</a>
+          </nav>
+
+          <div class="time-panel">
+            <span class="label">Timezone</span>
+            <span class="value">9:47 PM&nbsp; • &nbsp;14 July 2026</span>
+          </div>
+
+          <a href="/login" class="sign-up">Sign Up</a>
+        </div>
+
+        <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu" aria-expanded="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </header>
+
+      <!-- Center Aligned PromptInput Chatbox Mock-Up -->
+      <div class="center-chatbox-container" id="chatboxContainer">
+        <input type="file" id="chatFileInput" accept="image/*" multiple style="display:none;" />
+        
+        <!-- Slide-up Attachment Drawer -->
+        <div class="chatbox-attachment-tab">
+          <div class="chatbox-attachment-drawer" id="chatAttachmentDrawer"></div>
+        </div>
+
+        <!-- Main Input Card -->
+        <div class="chatbox-card" id="chatCard">
+          <!-- Collapsed Placeholder Trigger -->
+          <button type="button" class="chatbox-placeholder-btn" id="chatPlaceholderBtn">
+            Ask anything
+          </button>
+
+          <!-- Expanded Textarea -->
+          <textarea
+            class="chatbox-textarea"
+            id="chatTextarea"
+            placeholder="Ask anything"
+            rows="1"
+          ></textarea>
+
+          <!-- Bottom Actions Wrapper -->
+          <div class="chatbox-bottom-actions">
+            <!-- Model Picker -->
+            <div style="position: relative;">
+              <button type="button" class="chatbox-pill-btn" id="modelSelectBtn">
+                <span class="chatbox-model-icon"></span>
+                <span id="modelNameText">GPT 5.5</span>
+              </button>
+
+              <div class="chatbox-model-menu" id="modelMenu">
+                <button type="button" data-model="GPT 5.5"><span class="chatbox-model-icon"></span>GPT 5.5</button>
+                <button type="button" data-model="Opus 4.8"><span class="chatbox-model-icon" style="background:#f59e0b;"></span>Opus 4.8</button>
+                <button type="button" data-model="Gemini 3.5 Flash"><span class="chatbox-model-icon" style="background:#3b82f6;"></span>Gemini 3.5 Flash</button>
+                <button type="button" data-model="Composer 2.5"><span class="chatbox-model-icon" style="background:#a855f7;"></span>Composer 2.5</button>
+                <button type="button" data-model="GLM 5.2"><span class="chatbox-model-icon" style="background:#ec4899;"></span>GLM 5.2</button>
+              </div>
+            </div>
+
+            <!-- Effort Pill (Cycles Low / Medium / Max Effort) -->
+            <button type="button" class="chatbox-pill-btn" id="effortBtn">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style="margin-right:2px;">
+                <rect x="1.5" y="8" width="2.5" height="4.5" rx="1" fill="currentColor"/>
+                <rect x="5.75" y="5" width="2.5" height="7.5" rx="1" fill="currentColor" id="bar2"/>
+                <rect x="10" y="2" width="2.5" height="10.5" rx="1" fill="currentColor" id="bar3" opacity="0.3"/>
+              </svg>
+              <span id="effortText">Medium</span>
+            </button>
+
+            <!-- Attachment Plus Button -->
+            <button type="button" class="chatbox-pill-btn" id="plusFileBtn" style="padding:4px;" title="Attach file">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+                <path d="M7 2.5V11.5M2.5 7H11.5"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Wave Visualizer Overlay (Active during recording) -->
+          <div class="chatbox-audio-wave" id="audioWave">
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+
+          <!-- Main Action Button (Rotates between Mic, ArrowUp, and Stop) -->
+          <button type="button" class="chatbox-action-circle" id="chatActionBtn" aria-label="Use voice input">
+            <!-- Mic SVG -->
+            <svg id="iconMic" width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <rect x="5" y="1" width="4" height="7" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M2.75 6.5V7a4.25 4.25 0 0 0 8.5 0v-.5M7 11.25V13" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            <!-- Arrow Up SVG (Hidden by default) -->
+            <svg id="iconArrow" width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <path d="M7 12V2M7 2L2.5 6.5M7 2L11.5 6.5"/>
+            </svg>
+            <!-- Stop SVG (Hidden by default) -->
+            <svg id="iconStop" width="12" height="12" viewBox="0 0 14 14" fill="currentColor" style="display:none;">
+              <rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Hero Content (Bottom-Left) -->
+      <section class="hero">
+        <div class="hero-content">
+          <h1 class="hero-title">
+            <span class="line line-one"><span class="line-reveal">Stop Digging</span></span>
+            <span class="line line-two"><span class="line-reveal">Through Dashboards.</span></span>
+          </h1>
+
+          <p class="hero-copy">
+            Your metrics are scattered across a dozen dashboards.<br>
+            Vantage bring them into one clear signal, so every<br>
+            decision is backed by data you actually trust.
+          </p>
+
+          <a href="/login" class="primary-cta">
+            <span class="label">Get Started</span>
+            <div class="arrow-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </div>
+          </a>
+        </div>
+
+        <!-- Glass Demo Card (Bottom-Right) -->
+        <article class="demo-card" id="demoCard">
+          <div class="demo-visual">
+            <img
+              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ec4899'/%3E%3Cstop offset='60%25' stop-color='%236366f1'/%3E%3Cstop offset='100%25' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3Cfilter id='blur'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.015' numOctaves='3' result='noise'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='noise' scale='45' xChannelSelector='R' yChannelSelector='G'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23090d12'/%3E%3Ccircle cx='180' cy='190' r='140' fill='url(%23g)' filter='url(%23blur)' opacity='0.9'/%3E%3C/svg%3E"
+              alt="Abstract red and blue smoke"
+            />
+            <button class="play" type="button" aria-label="Play demo">
+              <svg viewBox="0 0 24 24">
+                <polygon points="6 4 20 12 6 20 6 4"></polygon>
+              </svg>
+            </button>
+          </div>
+          <button class="watch-button" type="button">Watch Demo</button>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    // ----------------------------------------------------------------
+    // Motion pending removal on demo-card animation end
+    // ----------------------------------------------------------------
+    var demoCard = document.getElementById('demoCard');
+    if (demoCard) {
+      demoCard.addEventListener('animationend', function() {
+        document.documentElement.classList.remove('motion-pending');
+        clearTimeout(motionFallbackTimer);
+      });
+    }
+
+    // ----------------------------------------------------------------
+    // Tablet / Mobile menu toggle
+    // ----------------------------------------------------------------
+    var menuToggle = document.getElementById('menuToggle');
+    var header = document.getElementById('header');
+    if (menuToggle && header) {
+      menuToggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var isOpen = header.classList.toggle('menu-open');
+        menuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!header.contains(e.target)) {
+          header.classList.remove('menu-open');
+          menuToggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && header.classList.contains('menu-open')) {
+          header.classList.remove('menu-open');
+          menuToggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+
+    // ----------------------------------------------------------------
+    // Center Aligned Chatbox Interaction Logic (Exact Mock-up physics)
+    // ----------------------------------------------------------------
+    var chatContainer = document.getElementById('chatboxContainer');
+    var chatCard = document.getElementById('chatCard');
+    var placeholderBtn = document.getElementById('chatPlaceholderBtn');
+    var textarea = document.getElementById('chatTextarea');
+    var actionBtn = document.getElementById('chatActionBtn');
+    var iconMic = document.getElementById('iconMic');
+    var iconArrow = document.getElementById('iconArrow');
+    var iconStop = document.getElementById('iconStop');
+    var audioWave = document.getElementById('audioWave');
+
+    var modelSelectBtn = document.getElementById('modelSelectBtn');
+    var modelMenu = document.getElementById('modelMenu');
+    var modelNameText = document.getElementById('modelNameText');
+
+    var effortBtn = document.getElementById('effortBtn');
+    var effortText = document.getElementById('effortText');
+    var bar2 = document.getElementById('bar2');
+    var bar3 = document.getElementById('bar3');
+
+    var plusFileBtn = document.getElementById('plusFileBtn');
+    var fileInput = document.getElementById('chatFileInput');
+    var drawer = document.getElementById('chatAttachmentDrawer');
+
+    var isRecording = false;
+    var efforts = ["Low", "Medium", "Max Effort"];
+    var currentEffortIdx = 1;
+
+    function expandChat() {
+      chatContainer.classList.add('expanded');
+      textarea.focus();
+    }
+
+    function collapseChat() {
+      if (textarea.value.trim() === '' && !drawer.hasChildNodes() && !isRecording) {
+        chatContainer.classList.remove('expanded');
+        modelMenu.classList.remove('open');
+      }
+    }
+
+    placeholderBtn.addEventListener('click', expandChat);
+    chatCard.addEventListener('click', function(e) {
+      if (e.target !== textarea && !chatContainer.classList.contains('expanded')) {
+        expandChat();
+      }
+    });
+
+    textarea.addEventListener('input', function() {
+      var val = textarea.value.trim();
+      if (val.length > 0) {
+        iconMic.style.display = 'none';
+        iconArrow.style.display = 'block';
+        iconStop.style.display = 'none';
+      } else if (!isRecording) {
+        iconMic.style.display = 'block';
+        iconArrow.style.display = 'none';
+        iconStop.style.display = 'none';
+      }
+    });
+
+    textarea.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmitQuery();
+      }
+      if (e.key === 'Escape') {
+        textarea.value = '';
+        collapseChat();
+      }
+    });
+
+    document.addEventListener('mousedown', function(e) {
+      if (!chatContainer.contains(e.target)) {
+        collapseChat();
+      }
+    });
+
+    // Model selection
+    modelSelectBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      modelMenu.classList.toggle('open');
+    });
+
+    modelMenu.querySelectorAll('button').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var model = btn.getAttribute('data-model');
+        modelNameText.textContent = model;
+        modelMenu.classList.remove('open');
+      });
+    });
+
+    // Effort cycle
+    effortBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      currentEffortIdx = (currentEffortIdx + 1) % efforts.length;
+      var eff = efforts[currentEffortIdx];
+      effortText.textContent = eff;
+      if (eff === "Low") {
+        bar2.setAttribute('opacity', '0.3');
+        bar3.setAttribute('opacity', '0.3');
+      } else if (eff === "Medium") {
+        bar2.setAttribute('opacity', '1');
+        bar3.setAttribute('opacity', '0.3');
+      } else {
+        bar2.setAttribute('opacity', '1');
+        bar3.setAttribute('opacity', '1');
+      }
+    });
+
+    // File attachments
+    plusFileBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function(e) {
+      var files = Array.from(e.target.files);
+      if (files.length > 0) {
+        chatContainer.classList.add('has-attachments');
+        expandChat();
+        files.forEach(function(file) {
+          var thumb = document.createElement('div');
+          thumb.style.cssText = 'position:relative; width:48px; height:48px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.2); flex-shrink:0; background:#1e1e24;';
+          var img = document.createElement('img');
+          img.src = URL.createObjectURL(file);
+          img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+          thumb.appendChild(img);
+          drawer.appendChild(thumb);
+        });
+      }
+    });
+
+    // Action button (Mic / Arrow / Stop)
+    actionBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (isRecording) {
+        stopVoice();
+      } else if (textarea.value.trim().length > 0) {
+        handleSubmitQuery();
+      } else {
+        startVoice();
+      }
+    });
+
+    function startVoice() {
+      expandChat();
+      isRecording = true;
+      audioWave.classList.add('recording');
+      iconMic.style.display = 'none';
+      iconArrow.style.display = 'none';
+      iconStop.style.display = 'block';
+
+      // Simulation of voice recognition
+      setTimeout(function() {
+        if (isRecording) {
+          textarea.value = "What is Vantage and how does it unify scattered dashboards?";
+          stopVoice();
+          textarea.dispatchEvent(new Event('input'));
+        }
+      }, 2500);
+    }
+
+    function stopVoice() {
+      isRecording = false;
+      audioWave.classList.remove('recording');
+      iconStop.style.display = 'none';
+      if (textarea.value.trim().length > 0) {
+        iconArrow.style.display = 'block';
+        iconMic.style.display = 'none';
+      } else {
+        iconArrow.style.display = 'none';
+        iconMic.style.display = 'block';
+      }
+    }
+
+    function handleSubmitQuery() {
+      var query = textarea.value.trim();
+      if (!query) return;
+      // Visual feedback
+      actionBtn.style.transform = 'scale(0.85)';
+      setTimeout(function() {
+        actionBtn.style.transform = 'scale(1)';
+        alert('Prompt submitted: "' + query + '" using engine ' + modelNameText.textContent);
+        textarea.value = '';
+        drawer.innerHTML = '';
+        chatContainer.classList.remove('has-attachments');
+        stopVoice();
+        collapseChat();
+      }, 150);
+    }
+  </script>
+</body>
+</html>

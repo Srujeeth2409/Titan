@@ -1,0 +1,1193 @@
+TITAN
+Master Engineering & Product Documentation
+Enterprise Documentation Set - Growing Master Document
+
+Document Status: DRAFT - v2.0
+Classification: Internal / Confidential
+Owner: Srujeeth Visinigiri, Project Lead & Principal Engineer Last Updated: September 24, 2026
+Contents of this document:
+Part 0 - Reader's Guide: Titan explained from first principles, with worked examples Part I - Governance, Product, Business and Functional / Non-Functional Requirements Part II - Architecture & High-Level Design
+Part III - Domain & Data, Retrieval & Model, Agent & Evaluation Design
+Part IV - Backend Low-Level Design  |  Part V - Frontend & Dashboard  |  Part VI - Security & Multi-Tenancy Part VII - Infrastructure & DevOps | Part VIII - Testing, QA & Observability | Part IX - Operations, DR & ADRs Part X - API Documentation | Part XI - Appendices
+
+Master Table of Contents
+PART 0 - Reader's Guide
+R0. How to Use This Document R1. Titan on One Page R2. Background: What RAG Is and Why R3. Core Concepts Explained
+R4. A Complete Worked Example R5. The Life of a Document R6. The Life of a Model R7. The Technology Stack, Explained
+R8. The Modules at a Glance R9. How We Know Titan Works R10. Frequently Asked Questions
+PART I - Governance, Product & Requirements
+00. Documentation Governance 01. Executive & Product 02. Business Requirements 03. Functional Requirements
+Non-Functional Requirements
+PART II - Architecture & HLD
+System Architecture: Context, Container, Component, Deployment, Data Flow, Ingestion / Query / Agentic / Verification /
+Training / Evaluation flows, Failure Architecture
+PART III - Data, Retrieval & Agent Intelligence
+Domain & Data Architecture 07. Retrieval & Model Architecture 08. Agent & Evaluation Design
+PART IV - Low-Level Design: Backend
+09. Backend LLD: repository layout, layering, interfaces, algorithms, LLM gateway, configuration, jobs, errors, logging, caching
+PART V - Frontend & Dashboard
+Frontend: screens, components, state, streaming, states, design system, accessibility
+PART VI - Security & Multi-Tenancy
+Security: threat model, authN/Z, prompt-injection defence, data protection, multi-tenancy, audit
+PART VII - Infrastructure & DevOps
+Infrastructure: environments, Compose, CI/CD, deployment, capacity sizing, cost model
+PART VIII - Testing, QA & Observability
+Testing & QA 14. Observability (traces, metrics, dashboards, SLOs, diagnosing a bad answer)
+PART IX - Operations, DR & ADRs
+15. Runbooks & Incident Process 16. Backup & Disaster Recovery 17. Architecture Decision Records (ADR-001 to ADR-013)
+PART X - API Documentation
+18. API: conventions, /ask, /ask/stream, /ingest, documents, runs and traces, evaluation, models, health
+PART XI - Appendices
+19. Appendices A-H: build plan, datasets, seed corpus, configuration reference, RACI, release checklist, references, change log
+
+PART 0
+Reader's Guide: Titan Explained From First Principles
+
+Start here. No prior knowledge of AI, search or RAG is assumed. Everything later in this document builds on this Part.
+
+R0. How to Use This Document
+
+R0.1 Who Should Read What
+This document is long because Titan is a real system. You do not need to read all of it. Use the table to find your path.
+
+
+
+R0.2 How the Document Is Organized
+
+
+
+R0.3 Reading Conventions
+Four kinds of coloured boxes appear throughout to help you learn faster:
+
+
+
+
+
+R1. Titan on One Page
+
+R1.1 What Titan Is
+Titan is a question-answering platform for a company's internal documents. You upload documents (runbooks, wikis, manuals, policies). Later, anyone can ask a question in plain English and Titan replies with an answer that is backed by specific passages from those documents, with numbered citations. If the documents do not contain the answer, Titan says so clearly instead of making something up.
+
+
+R1.2 The Five Big Ideas
+
+
+R1.2.1 What Titan Is Not
+It is not a general chatbot. It answers from your documents, not from the open internet.
+It is not a new language model. It uses existing language models and improves how they are given evidence.
+It does not guess. When evidence is weak, it abstains and explains what it could not find.
+
+R1.3 Target Outcomes
+
+
+These are targets. Measured results replace them as the project progresses.
+
+
+R2. Background: What RAG Is and Why It Exists
+
+R2.1 The Problem With Plain Language Models
+A large language model (LLM), such as Claude or GPT, is a program trained on huge amounts of public text. It writes fluent answers, but it has three limits that matter to companies:
+It does not know your private information. It has never seen your runbooks, contracts or internal wiki.
+Its knowledge is frozen in time. It knows nothing that happened after its training ended.
+
+It can hallucinate. When it does not know, it may still produce a confident, plausible, wrong answer.
+
+R2.2 The RAG Idea
+Retrieval-Augmented Generation (RAG) fixes this by giving the model the relevant passages at question time. The model then writes its answer from those passages instead of from memory.
+
+
+
+R2.3 Why Simple RAG Is Not Enough
+A basic RAG demo (one PDF, one embedding search, one prompt) works on easy questions and fails in predictable ways. Titan is designed around these failures:
+
+
+
+R3. Core Concepts Explained
+
+This section explains every technical idea used in Titan, one at a time, in plain language. Each concept is later referenced by name.
+
+R3.1 Chunk
+Documents are too long to give a model in full, and searching whole documents is imprecise. So Titan splits each document into chunks: passages of a few paragraphs. Each chunk is stored with metadata: which document it came from, which section heading it sits under, which page, and which chunking method produced it.
+
+
+
+R3.2 Embedding and Dense Retrieval
+An embedding is a list of numbers (for example 768 numbers) that captures the meaning of a piece of text. Texts with similar meaning get similar lists. Dense retrieval embeds the question, then finds the chunks whose embeddings are closest to it. Closeness is measured with cosine similarity, a score from -1 to 1 where higher means more similar.
+
+
+
+R3.3 Sparse Retrieval (BM25)
+BM25 is a classic keyword scoring method. It rewards chunks that contain the query's words, especially rare words, and normalizes for chunk length. It never understands meaning, but it is excellent at exact matches such as function names, configuration keys, ticket IDs and error codes.
+
+
+R3.4 Hybrid Retrieval and Reciprocal Rank Fusion (RRF)
+Titan runs dense and BM25 in parallel, producing two ranked lists. Reciprocal Rank Fusion merges them. Each chunk earns points from every list it appears in: the higher its rank, the more points. The points are then summed and the chunks re-sorted.
+
+
+Worked numeric example
+
+
+
+
+R3.5 Reranker (Cross-Encoder)
+The first retrieval stage is fast but approximate: it compares the question with each chunk separately. A cross-encoder reranker reads the question and one chunk together and outputs a relevance score. It is slower but much more precise, so Titan applies it only to the top candidates (default 30) and keeps the best few (default 6 to 8).
+
+
+R3.6 Fine-Tuning and Hard Negatives
+A model "as downloaded" is trained on general text. Fine-tuning continues its training on examples from the company's own corpus so it learns local vocabulary. Training examples are triples: a question, a chunk that answers it (the positive), and chunks that look relevant but do not answer it (the hard negatives).
+
+
+
+
+R3.7 Agent, Sub-Questions and Evidence Pool
+Some questions cannot be answered by one search because the answer is spread across documents ("multi-hop"). Titan's agent is a small controller program, driven by a language model, that follows a loop:
+Plan: is this simple or multi-hop?
+Decompose: split a multi-hop question into ordered sub-questions.
+Retrieve: search for the current sub-question, using answers found so far.
+Grade: is the collected evidence enough? If not, what is missing?
+Rewrite: form a better follow-up query and repeat, within limits.
+Synthesize and verify: write the answer and check citations.
+The passages gathered across rounds are kept in the evidence pool. Hard limits (maximum rounds, token budget, timeout) stop the agent from running forever or spending too much; if a limit trips, Titan falls back to a normal single-shot answer using the evidence collected so far.
+
+R3.8 Citation Verification, Confidence and Abstention
+After the model drafts an answer with numbered citations like [1] and [2], Titan splits it into individual claims and asks a judge model whether each cited passage really supports its claim. Unsupported claims are repaired once or removed and flagged. Titan then computes a confidence score from three ingredients: how relevant the retrieved passages were (R), what fraction of claims are verified (V), and how completely the question was addressed (P).
+
+
+
+R3.9 Evaluation Metrics
+
+
+
+R3.10 Tracing and Observability
+A trace is a timeline of everything that happened for one question: each search, each model call, each verification step, with durations, token counts and costs. Each step is a span. When an answer is wrong, the trace shows whether the problem was retrieval, ranking, generation or verification.
+
+
+R4. A Complete Worked Example, End to End
+
+This section follows one realistic question through Titan step by step, comparing a simple RAG system with Titan. All content is fictional and small so every step is visible.
+
+R4.1 The Sample Corpus
+
+
+R4.2 The Question
+"Who should I escalate to for the failure in INC-4172?"
+Notice that the question never names the service or the team. The answer requires two hops: incident -> owning team -> that team's escalation path.
+
+R4.3 What a Simple RAG System Does
+Embeds the question and retrieves the top chunks by meaning.
+
+The words "escalate" and "on-call" pull in both team documents (B and D) because both talk about escalation. Document A may or may not rank high.
+The model sees Document D (Identity Platform) and Document B (Payments Platform) without knowing which team owns the failure, and may pick the wrong one or hedge.
+
+
+R4.4 What Titan Does, Step by Step
+
+
+Final answer returned to the user
+
+
+R4.5 A Hallucinated Citation Being Caught
+Suppose the first draft also contained the sentence: "The runbook says to restart the service [2]." The verifier tests that claim against chunk [2] (the team document). It contains no restart instruction, so the verdict is unsupported.
+
+
+
+
+R4.6 An Abstention Example
+If the user asks "What was the revenue impact of INC-4172?" and no document mentions revenue impact, retrieval finds only Document A with low relevance to the question. The reranker scores are low (R below 0.35), so Titan abstains:
+
+
+R5. The Life of a Document
+
+This is what happens from the moment a document is uploaded until it can be found by a question.
+
+
+
+R5.1 What a Stored Chunk Looks Like
+
+
+
+R6. The Life of a Model
+
+Titan trains two models on a company's corpus: an embedder (for dense search) and a reranker. This section explains, in order, how a better model is made and safely put into use.
+
+
+
+R7. The Technology Stack, Explained
+
+For every technology: what it is, what Titan uses it for, why it was chosen and what else was considered. Choices are recorded formally as ADRs in Part IX.
+
+
+
+R8. The Modules at a Glance
+
+
+
+
+R9. How We Know Titan Works
+
+Claims about AI quality are meaningless without measurement. Titan builds measurement into the product:
+Public benchmarks. Titan is tested on MuSiQue, HotpotQA and 2WikiMultihopQA, standard multi-hop datasets. Anyone can compare against published numbers.
+A golden set. A hand-written set of 50+ questions on the demo corpus: simple lookups, multi-hop questions, unanswerable questions and ambiguous questions.
+Seven compared configurations (C0-C6). From dense-only search to the full agentic system with fine-tuned models, plus a long-context baseline. Each added feature must earn its place with numbers.
+Confidence intervals. Results are reported with statistical ranges so small, random differences are not mistaken for real gains.
+Judge calibration. LLM judges are checked against human labels on about 100 samples so their verdicts can be trusted.
+Failure taxonomy. Every wrong answer is assigned exactly one cause (for example retrieval miss, bad decomposition, unfaithful generation), so effort goes where it matters.
+
+R9.1 How Results Will Be Reported
+
+
+
+The cells above are placeholders to be filled from evaluation runs; no result is claimed until measured.
+
+
+R10. Frequently Asked Questions
+
+
+
+PART I
+Governance, Executive & Product Documentation, Business Requirements & Functional / Non-Functional Requirements
+
+Covers enterprise documentation tree sections 00-04
+
+Documentation Governance
+
+This section defines how the Titan documentation set is authored, versioned and reviewed, so that every Part of this master document and every future standalone artifact (LLD, Security, Infrastructure, Testing, ADRs) is produced consistently.
+
+Document Control
+
+
+Documentation Standards
+Naming Conventions
+Requirement IDs: FR-<MODULE>-<3-digit sequence>, e.g. FR-RET-001. Non-functional: NFR-<AREA>-
+<sequence>.
+ADR IDs: ADR-<3-digit sequence>, sequential across the system, never reused.
+Error codes: TT-<HTTP class><2-digit sequence>, e.g. TT-4001 (validation), TT-5003 (LLM provider failure).
+Model versions: <domain>-model-v<N>, e.g. embedder-model-v2, reranker-model-v1. Every run records the exact versions used.
+Experiment configs: C<N>-<slug>.yaml, e.g. C5-agentic-finetuned.yaml.
+API paths: /v1/<resource>, plural, lower-case, hyphenated where needed.
+Diagram Conventions
+Architecture diagrams follow the C4 model (Context, Container, Component, Code).
+
+Data-flow arrows are drawn source to destination and are never bidirectional unless the flow is genuinely symmetric.
+External systems are labelled [EXT]; Titan-owned services are labelled [SVC]; data stores are labelled [DB].
+API Documentation Standards
+Every endpoint entry (Part X) must include: description, auth requirement, request shape, response shape, validation rules, error responses, rate limits, pagination behaviour and a worked example. The OpenAPI schema generated by FastAPI is the source of truth; this document is a curated companion.
+Code Documentation Standards
+Every package under src/titan ships a README stating its responsibility and position in the module map.
+Every pipeline stage and agent node documents its inputs, outputs, failure modes, timeout, retry policy and idempotency guarantee.
+Every prompt template is versioned in the repo, has an owner, and is covered by at least one regression eval case.
+Versioning & Review Process
+Semantic-style versioning (major.minor). A minor bump covers additive clarifications; a major bump covers structural or decision changes and requires re-approval by Engineering, ML and Security leads. Review cadence is quarterly, or immediately after any ADR that materially changes a documented system.
+
+Glossary
+
+
+
+Executive & Product Documentation
+
+Executive Summary
+Titan is an enterprise-grade, agentic Retrieval-Augmented Generation platform. It ingests an organization's internal knowledge, indexes it with hybrid dense and sparse retrieval, improves retrieval with embedding and reranker models fine-tuned on the organization's own corpus, and answers questions through a bounded agent loop that decomposes multi-hop questions, gathers evidence in rounds, and verifies every citation before responding. Every request is traced end to end, and every design choice is measured through a built-in evaluation framework that compares configurations on accuracy, grounding, latency and cost.
+
+Product Vision
+Make enterprise question answering trustworthy and measurable: every answer is grounded, every claim is verifiable, and every architectural decision is backed by data rather than intuition.
+
+Product Mission
+To be the reference platform for teams that need answers over internal knowledge they can audit, and to give the engineers who run it the observability and evaluation tooling to improve it continuously.
+
+Problem Statement
+Single-shot RAG fails on multi-hop questions whose answer requires combining facts from several documents.
+Off-the-shelf embedding models underperform on domain vocabulary, internal identifiers and acronyms.
+LLMs attach citations that look plausible but do not support the claim, and most systems never check.
+When RAG quality drops, teams cannot tell whether ingestion, retrieval, reranking or generation is at fault.
+Teams rarely know whether added complexity (agents, rerankers, long context) is worth its latency and cost.
+
+Market Problem
+Most organizations that adopt RAG stop at a quickstart: one embedding model, one vector search, one prompt. Quality is judged by anecdote. Enterprise buyers need evidence that an answer is correct, a way to see why it failed when it does not, and a predictable cost profile. Tooling for evaluation, verification and tracing is fragmented across separate products.
+
+Existing Solutions
+
+
+Titan Differentiation
+Fine-tuned retrieval: embedder and reranker trained on synthetic, hard-negative-mined data from the customer's own corpus.
+Bounded agentic control: planner, decomposer, evidence grader and verifier with hard step, token and time budgets and a single-shot fallback.
+Verified citations: every claim-citation pair is checked; unsupported claims are repaired or removed.
+Built-in evaluation: public multi-hop benchmarks plus a customer golden set, run on every pipeline change.
+Full-stack observability: one trace per question across ingestion, retrieval, agent, generation and verification.
+Cost-aware: every configuration reports latency and dollars per query, enabling a measured accuracy-versus-cost decision.
+
+Product Principles
+
+
+Product Scope
+Multi-format ingestion (Markdown, text, HTML, PDF), normalization, chunking, deduplication and dual indexing.
+Hybrid retrieval with weighted RRF fusion and cross-encoder reranking.
+Synthetic-data generation and fine-tuning of an embedder and a reranker, with a model registry.
+Agentic controller (plan, decompose, retrieve, grade, rewrite, synthesize, verify, abstain).
+Grounded generation, citation verification, confidence scoring and structured abstention.
+
+Evaluation framework, benchmark runners and comparison reports.
+REST API with streaming, trace viewer dashboard and containerized deployment.
+
+Out of Scope
+Training or pre-training foundation LLMs.
+General-purpose chat, open-web browsing or personal-assistant features.
+Document-level permission mirroring from third-party systems (planned in a later release; v1 uses collection-level access).
+Native mobile applications.
+Real-time collaborative editing of source documents.
+
+Product Roadmap
+
+
+
+Business Requirements
+
+Business Objectives
+
+
+Stakeholders
+
+
+
+User Personas
+
+
+User Journeys
+Ask: the user asks a question, sees streamed progress, then an answer with clickable citations and a confidence breakdown.
+Abstain: the corpus lacks the answer; the user sees what was found, what was missing and which documents to check manually.
+Ingest: an admin uploads documents; Titan reports chunks created, duplicates skipped and index sync status.
+Diagnose: an ML engineer opens a failed run's trace and identifies the failing stage in minutes.
+Improve: an ML engineer triggers fine-tuning, reviews eval deltas against the current champion model and promotes it.
+
+Business Use Cases
+Internal documentation Q&A for engineering and support teams.
+Policy, compliance and runbook lookup with auditable citations.
+Cross-document research questions requiring multi-hop reasoning.
+Benchmarking harness for evaluating new embedding models, rerankers and LLMs.
+
+Success Metrics
+Targets below are design goals to be validated by measurement; recorded results replace them in each release report.
+
+
+
+Business Constraints
+Must operate within third-party LLM API rate limits and pricing.
+Fine-tuning must be feasible on rented or free-tier GPUs and base-sized models.
+Small team and fixed timeline require phased delivery with milestone gates.
+Evaluation datasets must be used under their published licenses.
+
+Assumptions
+Source documents are text-extractable or OCR-able with acceptable quality.
+Public multi-hop benchmarks are a valid proxy for enterprise multi-hop questions.
+LLM judges, once calibrated against human labels, are reliable enough for regression testing.
+Approximately 50,000 to 200,000 chunks is the v1 corpus size.
+
+Risks
+
+
+Functional Requirements
+
+This section documents what the system must do, organized by module and following the ID convention in Section
+00.2. Priority: P0 = MVP-blocking, P1 = near-term, P2 = later phase. One representative requirement is expanded to full acceptance-criteria form to establish the pattern for the full backlog.
+
+Worked Example - Full Requirement Form
+
+
+Ingestion (ING)
+
+
+Indexing (IDX)
+
+
+Retrieval (RET)
+
+
+Model Training (TRN)
+
+
+Agent (AGT)
+
+
+Generation & Verification (GEN / VER)
+
+
+Evaluation (EVL)
+
+
+
+API & Dashboard (API / DSH)
+
+
+Observability (OBS)
+
+
+
+Non-Functional Requirements
+
+Performance
+
+
+
+Scalability
+API and worker tiers are stateless and horizontally scalable.
+Vector store supports sharding and replication; v1 target 200k chunks, design headroom to 10M.
+Ingestion and training workloads are queue-driven and isolated from the query path.
+
+Availability & Reliability
+Query API availability target 99.5% in v1 (single region).
+Graceful degradation per Section 5.12: loss of a retriever, reranker or LLM never returns an ungrounded answer.
+All background jobs are idempotent and retry with exponential backoff.
+
+Security
+Authentication via API keys / JWT; role-based access control (Admin, ML Engineer, User) enforced server-side.
+Secrets held in a secrets manager or environment injection, never in the repository.
+TLS in transit; encryption at rest for object storage, database and vector store volumes.
+Prompt-injection defence: retrieved text is delimited and treated as untrusted data; instructions inside documents are never executed.
+PII-aware logging: prompts and chunks are redacted or hashed in logs according to policy.
+
+Maintainability
+Stable interfaces for LLM gateway, embedder, reranker and vector store to allow substitution.
+Minimum 80% unit-test coverage on retrieval, fusion, agent guardrails and verification logic.
+Configuration-driven experiments; no behaviour-changing constants in code.
+CI runs lint, type checks, unit tests and a small regression eval on every merge request.
+
+Observability
+100% of requests traced; sampling applies only to trace storage, never to metrics.
+Structured JSON logs with trace ID correlation.
+Dashboards for latency by stage, cost per query, cache hit rate, abstention rate and agent steps.
+
+Disaster Recovery
+
+
+
+Data Retention
+
+
+Compliance
+Audit trail for ingestion, deletion, model promotion and administrative actions.
+Support for data-deletion requests through document-level cascade delete.
+Third-party datasets and models used within their licenses; licenses tracked in the Appendices.
+
+Accessibility & Internationalization
+Dashboard conforms to WCAG 2.1 AA (keyboard navigation, contrast, screen-reader labels).
+UTF-8 throughout; v1 retrieval quality validated for English, with a multilingual embedder as a roadmap option.
+
+
+PART II
+Architecture & High-Level Design
+
+Covers enterprise documentation tree section 05: C4 Context, Container, Component, Deployment, Flows and Failure Architecture
+
+System Architecture
+
+This Part describes Titan at the high-level-design level. Architectural style: a modular monolith for the query path (API, agent, retrieval and generation deploy as one service with strict internal module boundaries) plus separately deployed asynchronous workers for ingestion, training and evaluation. This keeps the hot path simple and fast while isolating heavy, bursty workloads. Microservice extraction points are recorded in ADR-002 (Part IX).
+
+Context Diagram (C4 Level 1)
+
+
+
+
+
+
+
+External Systems Inventory
+
+
+
+Container Diagram (C4 Level 2)
+
+
+Container Inventory
+
+
+
+Component Architecture (C4 Level 3)
+Query Service Components
+
+
+Retrieval Service Components
+
+
+
+Worker Components
+
+
+Deployment Architecture
+
+
+
+Data Flow Architecture
+
+
+
+Ingestion Flow
+Client calls POST /v1/ingest with files or a source reference; the API validates type and size, stores the raw file in object storage and enqueues a job.
+The Ingestion Worker loads the file with the format-specific loader and normalizes it to clean text plus metadata (source, section, page).
+The Chunker applies the collection's configured strategy and stamps each chunk with strategy, index, section and character count.
+The Deduplicator compares each chunk embedding to existing chunks; those above the similarity threshold are flagged and skipped.
+Embeddings are generated in batches with the active embedder version; vectors and payloads are upserted to Qdrant.
+The same chunk IDs are added to the BM25 index; the Index Sync Monitor verifies parity and marks the job complete.
+Job status, counts and any failures are written to PostgreSQL and exposed via the API.
+
+Single-Shot Query Flow
+The API authenticates the request, applies rate limits and creates a run and trace ID.
+The Query Service embeds the question and issues dense and sparse retrieval in parallel.
+The Fusion Engine merges the lists with weighted RRF; the Reranker scores the top-N and returns the top-M chunks.
+The Synthesizer builds the grounded prompt with numbered context and calls the LLM Gateway.
+The Verifier checks each claim-citation pair; unsupported claims are repaired or dropped.
+The Confidence Scorer computes the composite score; below threshold, the Abstention Builder returns a structured abstention.
+The response (answer, citations, confidence, sources, latency, cost) is returned and the run is persisted.
+
+Agentic Query Flow
+
+
+
+Verification & Confidence Flow
+Extract atomic claims from the draft answer, each with its cited chunk numbers.
+For each claim-citation pair, the judge returns supported, partially supported or unsupported with a rationale.
+Unsupported claims trigger one repair attempt (re-generate the sentence using the cited chunk only); if still unsupported the claim is removed and flagged.
+Compute citation coverage (claims with a supported citation divided by total claims) and citation precision.
+Combine retrieval confidence, citation coverage and completeness into the composite score (formula in Section 7.6) and compare with the abstention threshold.
+
+Model Training Flow
+Snapshot the chunk corpus and split by document into train, validation and test partitions.
+Generate synthetic questions per chunk (single-hop) and per linked chunk pair (multi-hop); validate with a round-trip check.
+Mine hard negatives using BM25 and the base dense retriever, excluding positives.
+Fine-tune the embedder and the cross-encoder on a GPU job; log metrics to the tracker.
+Evaluate against the current champion on the held-out set; if it wins on defined metrics, register as a candidate.
+Promote through a controlled rollout (shadow, canary, full) and re-embed the collection into a new blue/green collection.
+
+Evaluation Flow
+Select datasets and a fixed sampled subset with a recorded seed.
+For each configuration (C0-C6), run every question through the Query Service in eval mode with tracing enabled.
+Compute answer, retrieval, grounding and efficiency metrics; run the judge ensemble.
+Compute bootstrap confidence intervals and per-question-type breakdowns.
+Generate the report: results table, Pareto frontier, ablations and failure taxonomy; store in object storage and link from the dashboard.
+
+Failure Architecture
+Every critical dependency has a defined, tested degraded-mode behaviour. This table is the HLD-level contract; operational response lives in the runbooks (Part IX). A core rule: no failure may result in an ungrounded answer presented as grounded.
+
+
+PART III
+Domain & Data Architecture, Retrieval & Model Architecture, Agent & Evaluation Design
+
+Covers enterprise documentation tree sections 06-08
+
+Domain & Data Architecture
+
+Domain Model
+
+
+Entity Relationship Diagram
+Relationships are listed as parent-to-child with cardinality (1 = one, * = many); FK columns are defined in Section 6.3.
+
+
+
+Database Schema (PostgreSQL)
+collections
+
+
+documents
+
+
+chunks
+
+
+
+runs and run_steps
+
+
+run_chunks and citations
+
+
+models
+
+
+eval_datasets, eval_cases, eval_runs, eval_results
+
+
+Vector Collection Design (Qdrant)
+
+
+Indexing Strategy
+PostgreSQL: B-tree indexes on (collection_id), (document_id), (content_hash, collection_id) and (trace_id); GIN index on JSONB config columns used in filters.
+run_steps and run_chunks are indexed by run_id; time-based indexes on runs.created_at for retention jobs.
+BM25: tokenizer and stop-word list are versioned; the index snapshot records the chunk-ID set and tokenizer version for parity checks.
+
+Constraints
+Foreign keys with ON DELETE CASCADE from documents to chunks and from chunks to run_chunks (audit rows in citations retain claim text with a nullable chunk reference).
+Every chunk in the vector index has exactly one row in chunks, and every chunk in the BM25 index has the same ID (enforced by the sync monitor).
+Only one champion model per (kind, collection); enforced by partial unique index.
+Evaluation results are immutable once written.
+
+Retention, Partitioning & Lifecycle
+runs, run_steps and run_chunks are range-partitioned by month; partitions older than 90 days are detached and aggregated.
+Document lifecycle: pending, processing, indexed; on deletion soft-delete, purge vectors and BM25 entries, then hard-delete rows and objects after a grace window.
+Model lifecycle: candidate, shadow, champion, retired; a retired model's artifacts are kept for reproducibility of past eval runs.
+
+Migration Strategy
+Schema migrations through Alembic; forward-only in production with tested down-migrations in staging.
+Embedder changes use blue/green vector collections and an alias swap; rollback is an alias swap back.
+Chunking-strategy changes reprocess from stored processed text without re-upload.
+
+Retrieval & Model Architecture
+
+Chunking Strategies
+
+
+The default strategy is chosen by benchmark (Section 8.4, ablation A2), not by assumption.
+
+Hybrid Retrieval & Fusion
+Dense: top-k_d = 50 by cosine similarity. Sparse: top-k_s = 50 by BM25.
+Fusion: weighted Reciprocal Rank Fusion, defined below. Default k = 60, weights w_d = 0.6 and w_s = 0.4, tuned on the dev set.
+
+
+The top-N (default 30) fused candidates go to the reranker; the top-M (default 6, agent rounds) or 8 (single-shot) are returned.
+Why hybrid: dense retrieval captures paraphrase and semantics; BM25 captures identifiers, function names, config keys and error codes that embeddings blur.
+
+Reranking
+A cross-encoder scores each (query, chunk) pair jointly. The baseline is a pre-trained base-sized reranker; the fine-tuned version is trained as in 7.4. Scores are passed through a sigmoid to obtain a calibrated relevance estimate used by the confidence scorer. A distilled or ONNX-quantized variant is evaluated for latency (ablation A6).
+
+Fine-Tuning Architecture
+Synthetic Data Generation
+Sample chunks stratified by document and section.
+Generate 2-3 questions per chunk using a strong LLM; for linked chunk pairs (shared entity or cross-reference) generate multi-hop questions that require both.
+Round-trip validate: retrieve with the base stack; keep the question if the source chunk appears in the top-20 or an LLM confirms the chunk answers it; discard ambiguous questions.
+Mine hard negatives from BM25 and base-dense results ranks 5-50, excluding the positive and any chunk the judge deems also relevant.
+Split by document into train / validation / test to avoid leakage.
+Training Configuration (starting values, tuned by sweep)
+
+
+Promotion Gate
+A candidate is promoted only if, on the held-out test partition and the public benchmark, it improves Recall@10 and NDCG@10 by a minimum margin, does not regress any question-type slice by more than 2 points, and meets the latency budget. Promotion follows shadow traffic and canary stages with automatic rollback.
+
+Model Registry & Versioning
+Each model records base checkpoint, code git SHA, data snapshot ID, hyperparameters, metrics and artifact URI.
+Serving pins model versions in configuration; every run persists the versions used.
+Prompts are versioned alongside models and included in the run's version manifest.
+
+Confidence Scoring & Abstention
+
+
+Weights and thresholds are configuration, calibrated on the dev set by plotting reliability curves and minimizing expected calibration error. The abstention response contains: what was found (top chunks with scores), what was missing (from the grader), and suggested documents to review manually.
+
+Agent & Evaluation Design
+
+Agent State
+
+
+Guardrails (defaults)
+
+
+Prompt Registry
+
+
+All retrieved text is inserted inside explicit delimiters and labelled as untrusted content; system prompts instruct the model never to follow instructions found in context.
+
+Experiment Configurations
+
+
+Metric Definitions
+
+
+
+Judge Calibration & Statistical Rigor
+Human-label a sample of about 100 answers; report agreement (Cohen's kappa) between each judge and the human labels.
+Use two judges of different model families for correctness and faithfulness; disagreements are reviewed manually.
+Use identical, seeded question subsets across configurations; report bootstrap 95% confidence intervals and paired significance tests for key comparisons.
+
+Ablations & Failure Taxonomy
+
+
+Every failed evaluation case is assigned exactly one primary failure class: retrieval miss (gold evidence not in candidates), ranking failure (in candidates but not returned), bad decomposition, premature stop, over-retrieval noise, bridge-entity error, unfaithful generation, verifier error, judge disagreement or gold-label issue. Counts per class per configuration are published, with annotated examples.
+
+PART IV
+Low-Level Design: Backend
+
+Covers enterprise documentation tree section 09: repository layout, layering, interfaces, algorithms, configuration, jobs, errors and logging
+
+Backend Low-Level Design
+
+
+
+Repository Layout
+
+
+Layering and Dependency Rules
+Code is arranged in layers. A layer may depend only on layers below it. This keeps the system testable and lets us swap technologies (for example Qdrant for another vector store) without rewriting business logic.
+
+
+
+
+Core Interfaces
+These Python Protocols define the contracts between layers. Every concrete class (Qdrant store, BM25 index, Claude provider, and so on) implements one of them.
+
+
+Core Data Models
+
+
+
+Retrieval Service: Algorithm
+The heart of the system. This listing is close to the real implementation and shows exactly how Sections 7.2 and 7.3 are realized.
+
+
+
+Agent Graph Implementation
+
+
+	return 'more'	
+
+
+The wrapper guarded(fn) does four things for every node: (1) opens a tracing span, (2) checks the token and time budget before running, (3) catches exceptions and converts them into a fallback to single-shot mode, and (4) records the step into run_steps.
+
+Verification and Confidence Algorithm
+
+
+LLM Gateway
+Every model call in the system goes through one module, the LLM Gateway. This is the single place where cost, safety and reliability are enforced.
+
+
+
+Configuration Management
+Behaviour lives in configuration, not code. A configuration file describes one complete system setup; the experiment configs C0 to C6 are simply different files. Precedence: command-line overrides, then environment variables, then the YAML file, then defaults.
+
+
+Environment Variables
+
+
+Background Jobs
+
+
+
+Error Handling and Error Catalogue
+All errors derive from TitanError and carry a stable code, an HTTP status and a user-safe message. Internal details go to logs and traces, never to the client.
+
+
+
+Logging
+Structured JSON, one line per event, always including trace_id, run_id, service, level and timestamp.
+Levels: DEBUG (development only), INFO (lifecycle events), WARNING (degraded modes), ERROR (failed requests), CRITICAL (data integrity risk).
+Never log secrets, full prompts or full chunk text in production. Log identifiers, lengths and hashes instead.
+
+
+Caching
+
+
+Concurrency and Performance Notes
+The API is async. CPU-bound work (embedding, reranking) runs in worker threads or a dedicated model-serving pool so the event loop is never blocked.
+Dense and sparse searches run concurrently; verification claims are judged concurrently with a semaphore (default 8) to respect rate limits.
+Embedding and upsert operations are batched (64 texts per embedding batch, 256 points per upsert).
+Connection pools: PostgreSQL (size 20, overflow 10), Redis (50), HTTP clients keep-alive with per-host limits.
+Every external call has a timeout; no unbounded waits exist anywhere on the request path.
+
+PART V
+Frontend & Dashboard
+
+Covers enterprise documentation tree section 10: screens, components, state, streaming, states, design system and accessibility
+
+Frontend & Dashboard
+
+
+
+Design Principles
+
+
+Screen Inventory
+
+
+
+Ask Screen Layout
+
+
+Component Architecture
+
+
+State Management
+
+
+
+API Client and Streaming
+A typed client is generated from the OpenAPI schema so the frontend can never drift from the backend. Streaming uses Server-Sent Events on POST /v1/ask/stream. The event types are:
+
+
+
+Loading, Empty and Error States
+Loading: skeleton screens for tables; live step stream for questions (no bare spinners).
+Empty: first-run guidance ("No documents yet. Upload documents to begin") with a direct upload action.
+Abstention: a distinct neutral card, not an error, explaining what was found and missing.
+Degraded: amber banner naming the impact ("Keyword search is unavailable; results may miss exact terms").
+Errors: show the human message and the error code and trace ID for support; offer retry when the error is retryable.
+
+Design System
+
+
+Accessibility and Responsiveness
+WCAG 2.1 AA: contrast ratios, visible focus, full keyboard operation of the Ask flow and citation navigation.
+
+Screen-reader labels for confidence bars, citation chips and step timeline; live region announces answer completion.
+Responsive: single-column layout on narrow screens with sources in a collapsible drawer; tables scroll horizontally within their container.
+
+Visualization
+
+
+
+PART VI
+Security & Multi-Tenancy
+
+Covers enterprise documentation tree section 11: threat model, access control, prompt-injection defence, data protection and audit
+
+Security & Multi-Tenancy
+
+
+
+Security Principles
+Least privilege: every user, service and job gets only the access it needs.
+Defence in depth: no single control is trusted; layers overlap.
+Untrusted by default: retrieved document text and model output are treated as untrusted input.
+Secure by default: safe configuration out of the box; risky options require explicit enabling.
+Auditable: security-relevant actions are logged immutably.
+
+Assets and Trust Boundaries
+
+
+
+Threat Model
+
+
+Authentication and Authorization
+Authentication: API keys (hashed at rest) for service clients; JWT for dashboard users via the organization's identity provider (OIDC).
+Authorization: role-based access control, checked server-side on every endpoint, plus collection-level scopes checked inside retrieval filters.
+
+
+
+Prompt-Injection Defence (Layered)
+Delimiting: retrieved chunks are placed inside clearly marked blocks (for example <context id="1"> ...
+</context>) and the prompt states that everything inside is data, never instructions.
+Instruction hierarchy: the system prompt states that instructions found in context or in the question that conflict with the system rules must be ignored.
+No tools in the generation step: the model that writes the answer cannot call external tools or fetch URLs, so an injected instruction has nothing dangerous to do.
+Output verification: the citation verifier and a lightweight output filter flag answers that contain instructions, unusual URLs or content unrelated to the question.
+Ingestion screening: an optional scan flags documents containing known injection patterns for admin review.
+Continuous testing: an adversarial prompt-injection set is part of the regression evaluation suite (Section 13.5).
+
+
+Data Protection
+
+
+
+Secrets Management
+No secrets in the repository, images or logs; pre-commit and CI secret scanning.
+Secrets injected at runtime from a secrets manager; local development uses an untracked .env file.
+Provider keys are scoped per environment with spending caps and rotated on a schedule and on suspicion of exposure.
+
+Multi-Tenancy
+
+
+
+Audit Logging
+The following events are written to an append-only audit log with actor, timestamp, resource and outcome: authentication events, document ingestion and deletion, collection and configuration changes, model promotion and rollback, evaluation triggers, exports, and permission changes.
+
+Supply Chain and Dependency Security
+Pinned dependency versions with lock files; automated vulnerability scanning in CI.
+Container images built from minimal base images, scanned before release, run as non-root.
+Model and dataset downloads verified by hash; licences recorded in the Appendices.
+
+Security Testing Checklist
+
+
+
+PART VII
+Infrastructure & DevOps
+
+Covers enterprise documentation tree section 12: containers, environments, CI/CD, deployment, sizing and cost model
+
+Infrastructure & DevOps
+
+
+
+Environments
+
+
+Docker Compose Services (Local / Demo)
+
+
+
+Reviewer quick start
+
+
+CI/CD Pipeline
+
+
+Branching and Release
+Trunk-based development with short-lived feature branches and mandatory review.
+Semantic version tags for services; prompt, config and model versions are tracked separately and recorded on every run.
+Database migrations are backward-compatible for one release (expand, migrate, contract).
+
+Production Deployment Notes
+
+
+Capacity Sizing (worked example)
+
+
+Cost Model
+Cost per query is dominated by language-model tokens. Titan records tokens for every call, so cost is measured, not guessed. The formula is:
+ cost = sum over calls of ( tokens_in x price_in[model] + tokens_out x price_out[model] ) / 1,000,000	
+
+
+Illustrative token budget per query (replace prices with current provider rates)
+
+
+Agentic mode uses roughly 1.1x the strong-tier tokens and about 1.7x the fast-tier tokens of single-shot in this example, plus extra retrieval latency.
+Levers to reduce cost: use auto mode so simple questions skip the agent; cache retrieval and embeddings; use the fast tier for grading; shrink top_m; batch claim judging.
+Each configuration in the C0-C6 report shows measured cost per query so trade-offs are explicit.
+
+PART VIII
+Testing, QA & Observability
+
+Covers enterprise documentation tree sections 13-14: test strategy, regression evaluation, load testing, telemetry, dashboards and alerts
+
+Testing & Quality Assurance
+
+
+
+Test Strategy
+
+
+Key Unit Test Cases
+
+
+
+Integration Test Scenarios
+Upload the four-document sample corpus (Section R4.1); assert chunk counts, both indexes in sync, duplicates flagged.
+Ask the INC-4172 question in agentic mode; assert two rounds, both documents cited, confidence above threshold.
+Ask an unanswerable question; assert a structured abstention.
+Delete a document; assert its chunks vanish from vector store, BM25 and caches.
+Kill Qdrant mid-request; assert sparse-only degraded response with the flag set.
+Swap the embedder version; assert blue/green re-index and zero-downtime alias swap.
+
+Regression Evaluation Gate
+On every relevant merge request the mini evaluation (about 100 questions from the golden set and benchmark subsets, fixed seed) runs and is compared with the main branch.
+
+
+
+Adversarial and Safety Tests
+Prompt-injection corpus: documents containing instructions ("ignore all rules", "print the system prompt"); the answer must not follow them.
+Cross-collection access attempts; the retrieval filter must prevent any leakage.
+Unanswerable and ambiguous questions; the system must abstain or ask for clarification rather than invent.
+Malformed and oversized files; parsers must fail safely.
+
+Load and Performance Tests
+
+
+Failure-Injection Tests
+Each row of the failure architecture (Section 5.12) has a matching automated test that disables the dependency and asserts the documented behaviour, including that no ungrounded answer is presented as grounded.
+
+Definition of Done for a Change
+Code reviewed; tests added or updated; all CI gates green.
+If retrieval, prompts, agent or models changed: regression evaluation attached to the merge request.
+Traces and metrics for any new stage added; documentation and ADR updated where design changed.
+Migration and rollback plan stated for schema or index changes.
+
+
+Observability
+
+
+
+Trace Design
+Each request is one trace. The root span is the API request; child spans cover each stage. Span names are stable so dashboards and alerts do not break.
+
+
+
+Metrics Catalogue
+
+
+Dashboards
+
+
+Service-Level Objectives and Alerts
+
+
+
+Diagnosing a Bad Answer (Target: under 10 minutes)
+Open the run in the Trace Viewer and walk this decision list from top to bottom. The first "yes" identifies the failing stage.
+
+
+PART IX
+Operations, Disaster Recovery & Architecture Decision Records
+
+Covers enterprise documentation tree sections 15-17: runbooks, incident process, DR and ADRs
+
+Operations & Runbooks
+
+
+
+Runbook: Index Out of Sync
+
+
+Runbook: LLM Provider Errors or Outage
+
+
+Runbook: Latency Spike
+
+
+Runbook: Answer Quality Regression (Abstentions or Citation Precision)
+
+
+Runbook: Cost Spike
+
+
+Runbook: Model or Prompt Rollback
+
+
+Incident Severity and Process
+
+
+Incident flow: detect, acknowledge, assign commander, mitigate first (restore service) then diagnose root cause, communicate, resolve, write a blameless postmortem with timeline, root cause, what worked, what did not and follow-up actions with owners and dates.
+
+Backup and Disaster Recovery
+
+
+
+
+Recovery Targets
+See Section 4.7 for RPO and RTO per component. The vector index is treated as a derived, rebuildable asset: the source of truth is raw documents plus PostgreSQL chunk rows.
+
+Disaster Recovery Drills
+Quarterly: restore PostgreSQL to a scratch environment and run the smoke suite against it.
+Quarterly: destroy the Qdrant collection in staging and rebuild from chunks; record the time taken versus the RTO.
+Before major releases: rehearse rollback of the previous release and of the last model promotion.
+
+
+Architecture Decision Records (ADRs)
+
+
+
+ADR-001: Python and FastAPI as the core stack
+
+
+ADR-002: Modular monolith for the query path; separate workers
+
+
+
+ADR-003: Hybrid retrieval with weighted Reciprocal Rank Fusion
+
+
+ADR-004: Qdrant as the vector store
+
+
+ADR-005: LangGraph for agent orchestration
+
+
+ADR-006: Bounded agent with single-shot fallback
+
+
+
+ADR-007: Tiered LLM usage (fast, strong, judge)
+
+
+ADR-008: Fine-tune embedder and reranker on synthetic corpus-specific data
+
+
+ADR-009: Document-level train/validation/test splits
+
+
+ADR-010: Blue/green vector collections for embedder changes
+
+
+ADR-011: One shared chunk ID across all stores
+
+
+ADR-012: Claim-level citation verification with one repair attempt
+
+
+ADR-013: OpenTelemetry for traces and metrics
+
+
+PART X
+API Documentation
+
+Covers enterprise documentation tree section 18: conventions, endpoints, examples and errors
+
+API Documentation
+
+
+
+Conventions
+
+
+POST /v1/ask
+
+
+Request
+
+
+Response 200 (answer)
+
+
+Response 200 (abstention)
+
+
+POST /v1/ask/stream
+
+
+
+POST /v1/ingest
+
+
+
+
+GET /v1/ingest/jobs/{job_id}
+
+
+Documents
+
+
+Runs and Traces
+
+
+Evaluation and Models
+
+
+Health
+
+
+
+PART XI
+Appendices
+
+Covers enterprise documentation tree section 19: build plan, datasets, configuration reference, roles, checklists, references and change log
+
+Appendices
+
+Six-Week Build Plan
+Milestone gates matter more than dates: do not start a phase before its gate passes.
+
+
+
+Datasets and Licences
+Licence and usage terms must be confirmed from each official source at adoption time and recorded in this table before results are published.
+
+
+Sample Seed Corpus
+The seed script ships a small documentation set so any reviewer can test immediately: the four-document incident example from Section R4.1, plus an open-source project's documentation (about 100-200 pages) providing realistic technical vocabulary. A golden set of 50+ questions accompanies it, covering simple lookups, multi-hop questions, unanswerable questions and ambiguous questions.
+
+Configuration Reference
+
+
+Roles and Responsibilities (RACI)
+R = Responsible, A = Accountable, C = Consulted, I = Informed.
+
+
+
+Release Checklist
+All CI gates green; nightly full evaluation shows no regression against the previous release.
+Model, prompt and configuration versions recorded in the release notes.
+Migration and rollback rehearsed in staging.
+Security scans clean; threat-model review updated if the design changed.
+Dashboards and alerts verified against the new build; runbooks reviewed.
+Documentation updated: affected Parts, ADRs and the change log.
+
+References
+Foundational works behind the techniques used in Titan (consult the originals for details):
+
+
+
+Change Log

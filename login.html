@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en" class="anim">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#161616">
+  <title>Orbit — Secure system</title>
+  <style>
+    /* ── BASE TOKENS & SHELL ── */
+    :root {
+      --ink: #ffffff;
+      --surface: #161616;
+      --orb-reveal: cubic-bezier(.16, 1, .3, 1);
+      --orb-soft: cubic-bezier(.25, .8, .28, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: var(--surface);
+      color: var(--ink);
+      font-family: "Orbit Sans", Arial, Helvetica, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ── ENTRANCE KEYFRAMES ── */
+    @keyframes orb-word {
+      0% { transform: translateY(118%); }
+      100% { transform: translateY(0); }
+    }
+
+    @keyframes orb-subject {
+      0% { opacity: 0; transform: translateX(-50%) translateY(3.4dvh); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @keyframes orb-quiet {
+      0% { opacity: 0; transform: translateY(12px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes orb-dim {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    @keyframes orb-corner {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Entrance delays when html.anim is active */
+    .anim .brand-mark {
+      animation: orb-quiet 620ms var(--orb-soft) 100ms both;
+    }
+    .anim .primary-nav li:nth-child(1) { animation: orb-dim 550ms var(--orb-soft) 180ms both; }
+    .anim .primary-nav li:nth-child(2) { animation: orb-dim 550ms var(--orb-soft) 225ms both; }
+    .anim .primary-nav li:nth-child(3) { animation: orb-dim 550ms var(--orb-soft) 270ms both; }
+    .anim .primary-nav li:nth-child(4) { animation: orb-dim 550ms var(--orb-soft) 315ms both; }
+    .anim .secure-system-pill {
+      animation: orb-quiet 620ms var(--orb-soft) 340ms both;
+    }
+    .anim .orbit-word__inner {
+      animation: orb-word 1150ms var(--orb-reveal) 300ms both;
+    }
+    .anim .flower {
+      animation: orb-subject 1150ms var(--orb-reveal) 660ms both;
+    }
+    .anim .support-copy__inner {
+      animation: orb-corner 720ms var(--orb-soft) 980ms both;
+    }
+
+    /* ── FULL VIEWPORT SPLIT ── */
+    main.viewport {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      width: 100vw;
+      height: 100dvh;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    /* Left 50% Stage */
+    section.stage {
+      position: relative;
+      width: 50%;
+      height: 100%;
+      background: var(--surface);
+      overflow: hidden;
+      contain: strict;
+      isolation: isolate;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* ── BRAND MARK ── */
+    .brand-mark {
+      position: absolute;
+      top: 2.141745dvh;
+      left: 3.854167vw;
+      width: clamp(34px, min(3.4375vw, 5.2dvh), 66px);
+      z-index: 4;
+    }
+
+    /* ── PRIMARY NAV ── */
+    .primary-nav {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    .primary-nav li {
+      position: absolute;
+      top: 3.426791dvh;
+      font-size: clamp(12px, min(1.15vw, 1.9dvh), 22px);
+      white-space: nowrap;
+    }
+
+    .primary-nav a {
+      color: #ffffff;
+      text-decoration: none;
+      pointer-events: auto;
+      transition: opacity 0.2s ease;
+    }
+
+    .primary-nav a:hover {
+      opacity: 0.7;
+    }
+
+    /* ── SECURE SYSTEM PILL ── */
+    .secure-system-pill {
+      position: absolute;
+      top: 2.336449dvh;
+      right: 3.5vw;
+      height: clamp(34px, 4.439252dvh, 57px);
+      padding: 0 clamp(16px, 1.8vw, 28px);
+      display: flex;
+      align-items: center;
+      background: #ffffff;
+      color: #161616;
+      border-radius: 999px;
+      font-size: clamp(12px, 1.4dvh, 16px);
+      font-weight: 600;
+      letter-spacing: 0.026923em;
+      z-index: 4;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    /* ── WORDMARK ORBIT ── */
+    .orbit-word {
+      position: absolute;
+      top: 10.565421dvh;
+      left: 3.848958vw;
+      margin: 0;
+      padding: 0;
+      font-family: "Orbit Display", "Times New Roman", Times, serif;
+      font-size: min(14.5vw, 32dvh);
+      line-height: 0.95;
+      letter-spacing: 0.033708em;
+      z-index: 1;
+      user-select: none;
+    }
+
+    .orbit-word__mask {
+      display: block;
+      overflow: hidden;
+      padding-bottom: 0.12em;
+      margin-bottom: -0.12em;
+    }
+
+    .orbit-word__inner {
+      display: flex;
+      align-items: baseline;
+    }
+
+    .orbit-word__white {
+      color: #ffffff;
+    }
+
+    .orbit-word__o {
+      display: inline-block;
+      transform: scaleX(1.0866);
+      margin-right: 0.042135em;
+    }
+
+    .orbit-word__pink {
+      background: linear-gradient(180deg, #ffc5dc 0%, #fd86db 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* ── FLOWER STACK ── */
+    .flower {
+      position: absolute;
+      top: 14.749065dvh;
+      left: 50%;
+      height: 106.109034dvh;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .flower__sizer {
+      height: 100%;
+      width: auto;
+      visibility: hidden;
+    }
+
+    .flower__layer {
+      position: absolute;
+      inset: 0;
+    }
+
+    .flower__layer img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .flower__layer--top {
+      mask-image: linear-gradient(#0000, #0000);
+      -webkit-mask-image: linear-gradient(#0000, #0000);
+    }
+
+    /* ── CORNER COPY ── */
+    .support-copy {
+      position: absolute;
+      bottom: 4.361371dvh;
+      color: #f7f7f7;
+      font-size: clamp(12px, min(1.1vw, 1.8dvh), 20px);
+      line-height: 1.35;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .support-copy--left {
+      left: 3.177083vw;
+    }
+
+    .support-copy--right {
+      right: 3.177083vw;
+      text-align: right;
+    }
+
+    .support-copy--left .support-copy__inner {
+      display: block;
+      transform: scaleX(1.073);
+      transform-origin: left bottom;
+    }
+
+    .support-copy--right .support-copy__inner {
+      display: block;
+      transform: scaleX(1.058);
+      transform-origin: right bottom;
+    }
+
+    /* ── RIGHT AUTH PANE ── */
+    section.auth-pane {
+      width: 50%;
+      height: 100%;
+      background: radial-gradient(circle at 65% 35%, #222222 0%, #161616 75%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 10;
+      padding: clamp(24px, 5vw, 64px);
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+      background: rgba(22, 22, 22, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: clamp(28px, 4vw, 40px);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
+
+    .auth-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #ffc5dc;
+      margin-bottom: 8px;
+    }
+
+    .auth-title {
+      font-size: clamp(24px, 2.5vw, 30px);
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .auth-desc {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.55);
+      margin-bottom: 24px;
+      line-height: 1.4;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px 14px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background: #ffffff;
+      color: #161616;
+      font-weight: 600;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .form-group input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+      color: #ffffff;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .form-group input:focus {
+      border-color: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .form-hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 2px;
+    }
+
+    .submit-btn {
+      width: 100%;
+      margin-top: 10px;
+      background: #ffffff;
+      color: #161616;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.2s ease;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status-banner {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .status-banner.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .status-banner.success {
+      display: block;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+    }
+
+    @media (max-width: 900px) {
+      main.viewport {
+        flex-direction: column;
+        overflow-y: auto;
+      }
+      section.stage {
+        display: none;
+      }
+      section.auth-pane {
+        width: 100%;
+        min-height: 100dvh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="viewport">
+    <!-- ── LEFT POSTER STAGE (ORBIT SPEC) ── -->
+    <section class="stage" id="stage">
+      <!-- SVG Brand Mark -->
+      <svg class="brand-mark" viewBox="0 0 66 62" fill="none">
+        <line x1="33" y1="1" x2="33" y2="61" stroke="#ffffff" stroke-width="5" stroke-linecap="square" />
+        <line x1="3" y1="31" x2="63" y2="31" stroke="#ffffff" stroke-width="5" stroke-linecap="square" />
+        <line x1="11.8" y1="9.8" x2="54.2" y2="52.2" stroke="#ffffff" stroke-width="5" stroke-linecap="square" />
+        <line x1="54.2" y1="9.8" x2="11.8" y2="52.2" stroke="#ffffff" stroke-width="5" stroke-linecap="square" />
+      </svg>
+
+      <!-- Primary Nav with scaleX per spec -->
+      <ul class="primary-nav">
+        <li style="left: 7.5vw; transform: scaleX(1.165);"><a href="#home">Home</a></li>
+        <li style="left: 14.5vw; transform: scaleX(1.052);"><a href="#resources">Resources</a></li>
+        <li style="left: 23.5vw; transform: scaleX(1.126);"><a href="#benefits">Benefits</a></li>
+        <li style="left: 32.5vw; transform: scaleX(1.168);"><a href="#contact">Contact</a></li>
+      </ul>
+
+      <!-- Secure system pill -->
+      <div class="secure-system-pill">Secure system</div>
+
+      <!-- Wordmark ORBIT -->
+      <h1 class="orbit-word" id="orbit-title" aria-label="Orbit">
+        <span class="orbit-word__mask">
+          <span class="orbit-word__inner">
+            <span class="orbit-word__white"><span class="orbit-word__o">O</span>R</span>
+            <span class="orbit-word__pink">BIT</span>
+          </span>
+        </span>
+      </h1>
+
+      <!-- Flower Stack -->
+      <div class="flower" id="flower">
+        <img class="flower__sizer" src="https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260808_192942_e1086505-d7da-433b-a59b-8220f4e6c808.png&w=1280&q=85" alt="" aria-hidden="true">
+        <div class="flower__layer flower__layer--bg" id="flower-bg">
+          <img src="https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260808_192942_e1086505-d7da-433b-a59b-8220f4e6c808.png&w=1280&q=85" alt="Pixel-art pink and violet lily">
+        </div>
+        <div class="flower__layer flower__layer--top" id="flower-top" aria-hidden="true">
+          <img src="https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260808_151324_bf318a5f-5525-4fc7-aab5-e9a341018828.png&w=1280&q=85" alt="">
+        </div>
+      </div>
+
+      <!-- Corner Copy -->
+      <div class="support-copy support-copy--left">
+        <span class="support-copy__inner">
+          Every workflow,<br>intelligently connected.
+        </span>
+      </div>
+      <div class="support-copy support-copy--right">
+        <span class="support-copy__inner">
+          Less manual work.<br>More meaningful output.
+        </span>
+      </div>
+    </section>
+
+    <!-- ── RIGHT AUTH PANE ── -->
+    <section class="auth-pane">
+      <div class="auth-card">
+        <span class="auth-tag">Titan Workspace</span>
+        <h2 class="auth-title" id="form-heading">Welcome back</h2>
+        <p class="auth-desc" id="form-subheading">Sign in to access your ingested documents and reasoning engine.</p>
+
+        <!-- Dynamic Interchange Tabs -->
+        <div class="tab-bar">
+          <button type="button" class="tab-btn active" id="tab-signin" onclick="setAuthMode('signin')">Sign In</button>
+          <button type="button" class="tab-btn" id="tab-signup" onclick="setAuthMode('signup')">Sign Up</button>
+        </div>
+
+        <div id="status-banner" class="status-banner"></div>
+
+        <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input id="email" type="email" required placeholder="name@company.com" autocomplete="email">
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input id="password" type="password" required placeholder="••••••••••••" autocomplete="current-password">
+            <span class="form-hint" id="password-hint" style="display: none;">At least 12 characters required</span>
+          </div>
+
+          <div class="form-group" id="confirm-password-group" style="display: none;">
+            <label for="confirm-password">Confirm Password</label>
+            <input id="confirm-password" type="password" placeholder="••••••••••••" autocomplete="new-password">
+          </div>
+
+          <button type="submit" class="submit-btn" id="submit-btn">Sign In to Titan</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ── 0. ENTRANCE REMOVAL ──
+    setTimeout(() => {
+      document.documentElement.classList.remove('anim');
+    }, 4500);
+
+    // ── 1. MOUSE MORPH-REVEAL TRAIL ──
+    const TRAIL_MAX_POINTS  = 60;
+    const TRAIL_HEAD_R      = 140;
+    const TRAIL_NOISE_AMP   = 44;
+    const TRAIL_BLOB_PTS    = 24;
+    const TRAIL_FADE_SPEED  = 0.92;
+    const TRAIL_SAMPLE_DIST = 8;
+
+    const stageEl     = document.getElementById('stage');
+    const flowerEl    = document.getElementById('flower');
+    const bgLayerEl   = document.getElementById('flower-bg');
+    const topLayerEl  = document.getElementById('flower-top');
+
+    const canvasBg  = document.createElement('canvas');
+    const ctxBg     = canvasBg.getContext('2d', { willReadFrequently: true });
+    const canvasTop = document.createElement('canvas');
+    const ctxTop    = canvasTop.getContext('2d', { willReadFrequently: true });
+
+    let headRadius = 0;
+    let hovering   = false;
+    let mouseX     = 0;
+    let mouseY     = 0;
+    let lastX      = -9999;
+    let lastY      = -9999;
+    let trail      = [];
+    let time       = 0;
+
+    function drawMorphBlob(ctx, cx, cy, r, t, seed) {
+      if (r < 2) return;
+      const pts = [];
+      for (let i = 0; i < TRAIL_BLOB_PTS; i++) {
+        const angle = (i / TRAIL_BLOB_PTS) * Math.PI * 2;
+        const n1 = Math.sin(angle * 3 + t * 1.4 + seed) * 0.45;
+        const n2 = Math.sin(angle * 5 - t * 0.9 + seed * 2.3) * 0.3;
+        const n3 = Math.cos(angle * 2 + t * 1.8 + seed * 0.7) * 0.25;
+        const noise = (n1 + n2 + n3) * TRAIL_NOISE_AMP * (r / 140);
+        const rad = Math.max(0, r + noise);
+        pts.push({ x: cx + Math.cos(angle) * rad, y: cy + Math.sin(angle) * rad });
+      }
+
+      ctx.beginPath();
+      const len = pts.length;
+      for (let i = 0; i < len; i++) {
+        const p0 = pts[i];
+        const p1 = pts[(i + 1) % len];
+        const midX = (p0.x + p1.x) / 2;
+        const midY = (p0.y + p1.y) / 2;
+        if (i === 0) ctx.moveTo(midX, midY);
+        else ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    stageEl.addEventListener('mousemove', (e) => {
+      hovering = true;
+      const rect = flowerEl.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    });
+
+    stageEl.addEventListener('mouseenter', () => { hovering = true; });
+    stageEl.addEventListener('mouseleave', () => { hovering = false; });
+
+    function tick() {
+      requestAnimationFrame(tick);
+      if (!flowerEl || !bgLayerEl || !topLayerEl || !ctxBg || !ctxTop) return;
+
+      const rect = flowerEl.getBoundingClientRect();
+      const w = Math.max(1, Math.round(rect.width));
+      const h = Math.max(1, Math.round(rect.height));
+
+      if (canvasBg.width !== w || canvasBg.height !== h) {
+        canvasBg.width = w;
+        canvasBg.height = h;
+        canvasTop.width = w;
+        canvasTop.height = h;
+      }
+
+      const targetR = hovering ? TRAIL_HEAD_R : 0;
+      headRadius += (targetR - headRadius) * (hovering ? 0.14 : 0.04);
+
+      if (hovering && headRadius > 5) {
+        const dx = mouseX - lastX;
+        const dy = mouseY - lastY;
+        if (Math.hypot(dx, dy) > TRAIL_SAMPLE_DIST) {
+          trail.push({ x: mouseX, y: mouseY, r: headRadius, alpha: 1, seed: Math.random() * 100 });
+          if (trail.length > TRAIL_MAX_POINTS) trail.shift();
+          lastX = mouseX;
+          lastY = mouseY;
+        }
+      }
+
+      time += 0.016;
+
+      for (let i = trail.length - 1; i >= 0; i--) {
+        trail[i].alpha *= TRAIL_FADE_SPEED;
+        trail[i].r *= 0.995;
+        if (trail[i].alpha < 0.01) trail.splice(i, 1);
+      }
+
+      if (trail.length === 0 && headRadius < 2) {
+        bgLayerEl.style.maskImage = '';
+        bgLayerEl.style.webkitMaskImage = '';
+        topLayerEl.style.maskImage = 'linear-gradient(#0000, #0000)';
+        topLayerEl.style.webkitMaskImage = 'linear-gradient(#0000, #0000)';
+        return;
+      }
+
+      // BG Layer: White fill + destination-out blobs = holes
+      ctxBg.clearRect(0, 0, w, h);
+      ctxBg.fillStyle = '#ffffff';
+      ctxBg.fillRect(0, 0, w, h);
+      ctxBg.globalCompositeOperation = 'destination-out';
+
+      // Top Layer: Clear + white blobs = reveal trail
+      ctxTop.clearRect(0, 0, w, h);
+      ctxTop.fillStyle = '#ffffff';
+      ctxTop.globalCompositeOperation = 'source-over';
+
+      for (const pt of trail) {
+        ctxBg.fillStyle = `rgba(0,0,0,${pt.alpha})`;
+        drawMorphBlob(ctxBg, pt.x, pt.y, pt.r, time, pt.seed);
+
+        ctxTop.fillStyle = `rgba(255,255,255,${pt.alpha})`;
+        drawMorphBlob(ctxTop, pt.x, pt.y, pt.r, time, pt.seed);
+      }
+
+      if (hovering && headRadius > 2) {
+        ctxBg.fillStyle = 'rgba(0,0,0,1)';
+        drawMorphBlob(ctxBg, mouseX, mouseY, headRadius, time, 42);
+
+        ctxTop.fillStyle = 'rgba(255,255,255,1)';
+        drawMorphBlob(ctxTop, mouseX, mouseY, headRadius, time, 42);
+      }
+
+      const maskBgUrl = `url(${canvasBg.toDataURL()})`;
+      const maskTopUrl = `url(${canvasTop.toDataURL()})`;
+
+      bgLayerEl.style.maskImage = maskBgUrl;
+      bgLayerEl.style.webkitMaskImage = maskBgUrl;
+      bgLayerEl.style.maskSize = '100% 100%';
+      bgLayerEl.style.webkitMaskSize = '100% 100%';
+
+      topLayerEl.style.maskImage = maskTopUrl;
+      topLayerEl.style.webkitMaskImage = maskTopUrl;
+      topLayerEl.style.maskSize = '100% 100%';
+      topLayerEl.style.webkitMaskSize = '100% 100%';
+    }
+
+    tick();
+
+    // ── 2. DYNAMIC AUTH LOGIC (SIGN IN / SIGN UP) ──
+    const API_URL = 'http://localhost:8000';
+    let currentMode = 'signin';
+
+    function setAuthMode(mode) {
+      currentMode = mode;
+      const tabSignIn = document.getElementById('tab-signin');
+      const tabSignUp = document.getElementById('tab-signup');
+      const heading = document.getElementById('form-heading');
+      const subheading = document.getElementById('form-subheading');
+      const confirmGroup = document.getElementById('confirm-password-group');
+      const passwordHint = document.getElementById('password-hint');
+      const submitBtn = document.getElementById('submit-btn');
+      const banner = document.getElementById('status-banner');
+
+      banner.className = 'status-banner';
+      banner.style.display = 'none';
+
+      if (mode === 'signin') {
+        tabSignIn.classList.add('active');
+        tabSignUp.classList.remove('active');
+        heading.textContent = 'Welcome back';
+        subheading.textContent = 'Sign in to access your ingested documents and reasoning engine.';
+        confirmGroup.style.display = 'none';
+        passwordHint.style.display = 'none';
+        submitBtn.textContent = 'Sign In to Titan';
+      } else {
+        tabSignUp.classList.add('active');
+        tabSignIn.classList.remove('active');
+        heading.textContent = 'Create your account';
+        subheading.textContent = 'Get started with citation-backed document intelligence.';
+        confirmGroup.style.display = 'flex';
+        passwordHint.style.display = 'block';
+        submitBtn.textContent = 'Create Account';
+      }
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirm-password').value;
+      const banner = document.getElementById('status-banner');
+      const submitBtn = document.getElementById('submit-btn');
+
+      banner.className = 'status-banner';
+      banner.style.display = 'none';
+
+      if (currentMode === 'signup') {
+        if (password.length < 12) {
+          banner.className = 'status-banner error';
+          banner.textContent = 'Password must be at least 12 characters long.';
+          return;
+        }
+        if (password !== confirmPassword) {
+          banner.className = 'status-banner error';
+          banner.textContent = 'Passwords do not match.';
+          return;
+        }
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Authenticating...';
+
+      const endpoint = currentMode === 'signin' ? '/v1/auth/login' : '/v1/auth/signup';
+
+      try {
+        const res = await fetch(`${API_URL}${endpoint}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          const msg = data.detail?.message || data.detail || 'Authentication failed.';
+          const code = data.detail?.code ? ` (${data.detail.code})` : '';
+          throw new Error(`${msg}${code}`);
+        }
+
+        if (data.access_token) {
+          localStorage.setItem('titan_access_token', data.access_token);
+        }
+
+        banner.className = 'status-banner success';
+        banner.textContent = currentMode === 'signin'
+          ? 'Sign in successful! Redirecting to workspace...'
+          : 'Account created! Redirecting to workspace...';
+
+        setTimeout(() => {
+          window.location.href = '/app/documents';
+        }, 600);
+      } catch (err) {
+        banner.className = 'status-banner error';
+        banner.textContent = err.message || 'Network error — could not reach the server.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = currentMode === 'signin' ? 'Sign In to Titan' : 'Create Account';
+      }
+    }
+  </script>
+</body>
+</html>
