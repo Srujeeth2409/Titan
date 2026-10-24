@@ -31,7 +31,7 @@ from app.db.models import (
     Organization,
     RefreshToken,
     User,
-    Workspace,
+    Workspace,gits
 )
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, SignupRequest, UserResponse

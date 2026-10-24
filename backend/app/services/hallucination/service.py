@@ -8,7 +8,6 @@ logged so trends surface on the Analytics Dashboard.
 """
 from dataclasses import dataclass
 
-
 @dataclass
 class HallucinationReport:
     score: float  # 0 = fully grounded, 1 = fully unsupported
