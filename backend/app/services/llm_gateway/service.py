@@ -90,7 +90,7 @@ class LLMGateway:
 
         # 3. Local Ollama / Qwen
         if "ollama" in selected_provider or "local" in selected_provider:
-            target_model = model or settings.default_model or "qwen2.5:7b"
+            target_model = model or settings.default_model or "qwen2.5:1.5b"
             async for token in self._stream_ollama(system_prompt, user_prompt, target_model):
                 yield token
             return
@@ -314,6 +314,11 @@ class LLMGateway:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
+            "options": {
+                "temperature": 0.2,
+                "num_ctx": 4096,
+                "num_predict": 1024,
+            },
             "stream": True,
         }
 

@@ -1,22 +1,33 @@
 "use client";
 
-import { AskBox } from "@/components/ask-box";
+import * as React from "react";
+import { useState } from "react";
+import { ClaudeSidebar } from "@/components/claude-sidebar";
+import { ChatConversation } from "@/components/chat-conversation";
 
-export default function AskPage() {
+export default function WorkstationPage() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
   return (
-    <div className="ask-page">
-      {/* Hero heading */}
-      <div className="ask-page-hero">
-        <h1 className="ask-page-title">
-          What do you want to know?
-        </h1>
-        <p className="ask-page-subtitle">
-          Ask questions across your ingested documents. Every answer is cited and verified.
-        </p>
-      </div>
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        width: "100%",
+        minHeight: "calc(100vh - 185px)",
+      }}
+    >
+      {/* Claude-style Left Sidebar in Light Glass UI */}
+      <ClaudeSidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen((prev) => !prev)}
+      />
 
-      {/* Ask Box */}
-      <AskBox />
+      {/* Main Multi-turn Conversation View */}
+      <ChatConversation
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+      />
     </div>
   );
 }

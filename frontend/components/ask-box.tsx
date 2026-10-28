@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { askStream, getDocuments, TitanApiError } from "@/lib/api";
 
+import { PromptInput } from "@/components/ui/ai-chat-input";
+
 export interface Citation {
   index: number;
   chunk_id: string;
@@ -44,7 +46,7 @@ export interface HallucinationInfo {
 
 export function AskBox({ id }: { id?: string }) {
   const [question, setQuestion] = useState("");
-  const [selectedModel, setSelectedModel] = useState("Ollama (Local)");
+  const [selectedModel, setSelectedModel] = useState("Ollama (Local 1.5B)");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"Fast" | "Medium" | "Deep">("Medium");
   const [isModeDropdownOpen, setIsModeDropdownOpen] = useState(false);
@@ -75,7 +77,7 @@ export function AskBox({ id }: { id?: string }) {
 
   // Real Models list matching backend LLMGateway
   const models = [
-    { id: "qwen2.5:7b", name: "Ollama (Local)", tier: "Local Qwen 2.5", provider: "ollama" },
+    { id: "qwen2.5:1.5b", name: "Ollama (Local 1.5B)", tier: "Lightweight (~1.5B params)", provider: "ollama" },
     { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", tier: "Strong", provider: "anthropic" },
     { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B (Groq)", tier: "Fast & Free", provider: "groq" },
     { id: "qwen-2.5-32b", name: "Qwen 2.5 32B (Groq)", tier: "Fast", provider: "groq" },
@@ -296,74 +298,29 @@ export function AskBox({ id }: { id?: string }) {
         transition: "all 300ms cubic-bezier(0.16, 1, 0.3, 1)",
       }}
     >
-      {/* ── CHAT BAR CARD ── */}
-      <div
-        style={{
-          width: "100%",
-          backgroundColor: "rgba(22, 22, 26, 0.92)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
-          borderRadius: "20px",
-          padding: "12px 16px",
-          boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.08)",
-          boxSizing: "border-box",
-        }}
-      >
-        {/* Top Input Row */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {/* Collection Button */}
-          <div style={{ position: "relative" }}>
+      {/* ── COLLECTION SELECTOR & AI CHAT INPUT (SENT BY USER) ── */}
+      <div className="w-full flex flex-col items-center">
+        {/* Active Collection Selector */}
+        <div className="flex items-center gap-2 mb-3 z-20">
+          <div className="relative">
             <button
               type="button"
               onClick={() => setIsCollectionPickerOpen(!isCollectionPickerOpen)}
-              title={`Collection: ${collection}`}
-              style={{
-                height: "32px",
-                padding: "0 10px",
-                borderRadius: "16px",
-                backgroundColor: "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                color: "#ffffff",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                cursor: "pointer",
-                fontSize: "12px",
-                fontWeight: 500,
-                flexShrink: 0,
-                transition: "background-color 150ms",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.16)")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)")}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 shadow-sm transition-all"
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
               </svg>
-              <span>{collection}</span>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <span>Corpus: <strong>{collection}</strong></span>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
 
-            {/* Collection Dropdown */}
             {isCollectionPickerOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 8px)",
-                  left: 0,
-                  width: "220px",
-                  backgroundColor: "#16161a",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                  borderRadius: "12px",
-                  padding: "6px",
-                  boxShadow: "0 12px 36px rgba(0, 0, 0, 0.6)",
-                  zIndex: 100,
-                }}
-              >
-                <div style={{ padding: "6px 8px", fontSize: "11px", fontWeight: 600, color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase" }}>
-                  Active Collection
+              <div className="absolute top-[calc(100%+6px)] left-1/2 -translate-x-1/2 w-48 bg-white border border-slate-200 rounded-xl p-1.5 shadow-xl z-50">
+                <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Target Corpus
                 </div>
                 {collections.map((col) => (
                   <button
@@ -373,35 +330,18 @@ export function AskBox({ id }: { id?: string }) {
                       setCollection(col);
                       setIsCollectionPickerOpen(false);
                     }}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      backgroundColor: collection === col ? "rgba(255, 255, 255, 0.12)" : "transparent",
-                      border: "none",
-                      color: "#ffffff",
-                      fontSize: "13px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors ${
+                      collection === col ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-700 hover:bg-slate-50"
+                    }`}
                   >
                     <span>{col}</span>
-                    {collection === col && <span style={{ color: "#22c55e" }}>✓</span>}
+                    {collection === col && <span>✓</span>}
                   </button>
                 ))}
-                <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.08)", marginTop: "4px", paddingTop: "4px" }}>
+                <div className="border-t border-slate-100 mt-1 pt-1">
                   <Link
                     href="/app/documents"
-                    style={{
-                      display: "block",
-                      padding: "6px 8px",
-                      fontSize: "12px",
-                      color: "#60a5fa",
-                      textDecoration: "none",
-                    }}
+                    className="block px-2 py-1 text-[11px] text-indigo-600 font-medium hover:underline"
                   >
                     + Manage in Documents →
                   </Link>
@@ -409,260 +349,23 @@ export function AskBox({ id }: { id?: string }) {
               </div>
             )}
           </div>
-
-          {/* Input field */}
-          <div
-            style={{
-              flex: 1,
-              position: "relative",
-              display: "flex",
-              alignItems: "center",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              borderRadius: "10px",
-              padding: "7px 12px",
-              backgroundColor: "rgba(0, 0, 0, 0.35)",
-              transition: "border-color 0.2s ease",
-            }}
-          >
-            <input
-              ref={inputRef}
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAsk();
-                }
-              }}
-              placeholder="Ask questions across your ingested corpus..."
-              style={{
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: "#ffffff",
-                fontSize: "0.875rem",
-                fontFamily: "inherit",
-              }}
-            />
-          </div>
-
-          {/* Voice Input */}
-          <button
-            type="button"
-            onClick={toggleVoice}
-            title={isListening ? "Listening..." : "Voice input"}
-            style={{
-              width: "32px",
-              height: "32px",
-              borderRadius: "50%",
-              backgroundColor: isListening ? "rgba(239, 68, 68, 0.2)" : "rgba(255, 255, 255, 0.08)",
-              border: isListening ? "1px solid #ef4444" : "none",
-              color: isListening ? "#ef4444" : "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              flexShrink: 0,
-              transition: "all 150ms",
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          </button>
-
-          {/* Submit Action Button */}
-          <button
-            type="button"
-            onClick={() => handleAsk()}
-            disabled={isStreaming || !question.trim()}
-            style={{
-              height: "32px",
-              padding: "0 14px",
-              borderRadius: "8px",
-              backgroundColor: "#ffffff",
-              color: "#000000",
-              fontWeight: 600,
-              fontSize: "12px",
-              border: "none",
-              cursor: isStreaming || !question.trim() ? "not-allowed" : "pointer",
-              opacity: isStreaming || !question.trim() ? 0.4 : 1,
-              transition: "opacity 0.15s ease",
-            }}
-          >
-            {isStreaming ? "Thinking..." : "Ask"}
-          </button>
         </div>
 
-        {/* Bottom Options Row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "12px", paddingTop: "4px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            {/* Model Pill */}
-            <div style={{ position: "relative" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsModelDropdownOpen(!isModelDropdownOpen);
-                  setIsModeDropdownOpen(false);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 10px",
-                  borderRadius: "9999px",
-                  backgroundColor: "rgba(255, 255, 255, 0.08)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  color: "#ffffff",
-                  fontSize: "0.75rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "background-color 150ms",
-                }}
-              >
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#22c55e" }} />
-                <span>{selectedModel}</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-
-              {/* Model Dropdown Menu */}
-              {isModelDropdownOpen && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 8px)",
-                    left: 0,
-                    width: "240px",
-                    backgroundColor: "#16161a",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: "12px",
-                    padding: "6px",
-                    boxShadow: "0 12px 36px rgba(0, 0, 0, 0.6)",
-                    zIndex: 100,
-                  }}
-                >
-                  <div style={{ padding: "6px 8px", fontSize: "11px", fontWeight: 600, color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase" }}>
-                    Select Real LLM Provider
-                  </div>
-                  {models.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedModel(m.name);
-                        setIsModelDropdownOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        backgroundColor: selectedModel === m.name ? "rgba(255, 255, 255, 0.12)" : "transparent",
-                        border: "none",
-                        color: "#ffffff",
-                        fontSize: "12px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 500 }}>{m.name}</div>
-                        <div style={{ fontSize: "10px", color: "rgba(255, 255, 255, 0.4)" }}>{m.provider} • {m.tier}</div>
-                      </div>
-                      {selectedModel === m.name && <span style={{ color: "#22c55e" }}>✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Mode Pill */}
-            <div style={{ position: "relative" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsModeDropdownOpen(!isModeDropdownOpen);
-                  setIsModelDropdownOpen(false);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 10px",
-                  borderRadius: "9999px",
-                  backgroundColor: "rgba(255, 255, 255, 0.08)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  color: "#ffffff",
-                  fontSize: "0.75rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                }}
-              >
-                <span>{selectedMode} Mode</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-
-              {isModeDropdownOpen && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 8px)",
-                    left: 0,
-                    width: "260px",
-                    backgroundColor: "#16161a",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: "12px",
-                    padding: "6px",
-                    boxShadow: "0 12px 36px rgba(0, 0, 0, 0.6)",
-                    zIndex: 100,
-                  }}
-                >
-                  <div style={{ padding: "6px 8px", fontSize: "11px", fontWeight: 600, color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase" }}>
-                    Reasoning Pipeline Mode
-                  </div>
-                  {modes.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMode(m.id as any);
-                        setIsModeDropdownOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        backgroundColor: selectedMode === m.id ? "rgba(255, 255, 255, 0.12)" : "transparent",
-                        border: "none",
-                        color: "#ffffff",
-                        fontSize: "12px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ fontWeight: 500 }}>{m.label}</div>
-                      <div style={{ fontSize: "10px", color: "rgba(255, 255, 255, 0.4)" }}>{m.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.4)" }}>
-            Press <kbd style={{ padding: "2px 5px", background: "rgba(255,255,255,0.08)", borderRadius: "4px" }}>Enter ↵</kbd>
-          </div>
+        {/* PromptInput Component sent by the user */}
+        <div className="w-full flex justify-center">
+          <PromptInput
+            placeholder="Ask questions across your ingested corpus..."
+            models={models.map((m) => m.name)}
+            efforts={["Fast", "Medium", "Deep"]}
+            defaultValue={question}
+            value={question}
+            onChange={(val) => setQuestion(val)}
+            onSubmit={(val, meta) => {
+              if (meta?.model) setSelectedModel(meta.model);
+              if (meta?.effort) setSelectedMode(meta.effort as any);
+              handleAsk(val);
+            }}
+          />
         </div>
       </div>
 
@@ -673,10 +376,10 @@ export function AskBox({ id }: { id?: string }) {
             marginTop: "16px",
             padding: "10px 16px",
             borderRadius: "12px",
-            background: "rgba(255, 255, 255, 0.04)",
-            border: "1px dashed rgba(255, 255, 255, 0.15)",
+            background: "#f8fafc",
+            border: "1px dashed #cbd5e1",
             fontSize: "12px",
-            color: "rgba(255, 255, 255, 0.6)",
+            color: "#64748b",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -688,7 +391,7 @@ export function AskBox({ id }: { id?: string }) {
           <Link
             href="/app/documents"
             style={{
-              color: "#ffffff",
+              color: "#4f46e5",
               fontWeight: 600,
               textDecoration: "underline",
               marginLeft: "8px",
@@ -699,19 +402,17 @@ export function AskBox({ id }: { id?: string }) {
         </div>
       )}
 
-      {/* ── ANSWER & PIPELINE CARD ── */}
+      {/* ── ANSWER & PIPELINE CARD (Clean White Apple-Grade Card) ── */}
       {hasStarted && (
         <div
           style={{
             width: "100%",
             marginTop: "20px",
-            backgroundColor: "rgba(22, 22, 26, 0.95)",
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
+            backgroundColor: "#ffffff",
+            border: "1px solid #e2e8f0",
             borderRadius: "20px",
             padding: "24px",
-            boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7)",
+            boxShadow: "0 20px 45px -10px rgba(0, 0, 0, 0.08)",
             boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
@@ -722,17 +423,28 @@ export function AskBox({ id }: { id?: string }) {
           {/* Header row */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#60a5fa" }}>
+              <span style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: isStreaming ? "#4f46e5" : "#94a3b8",
+                boxShadow: isStreaming ? "0 0 10px rgba(79,70,229,0.5)" : "none",
+                display: "inline-block",
+                animation: isStreaming ? "pulse 1.5s ease infinite" : "none",
+                transition: "all 300ms ease",
+              }} />
+              <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#4f46e5" }}>
                 Titan Grounded Reasoning
               </span>
               {confidence?.composite !== undefined && (
                 <span style={{
                   fontSize: "11px",
+                  fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "999px",
-                  backgroundColor: "rgba(34, 197, 94, 0.12)",
-                  color: "#4ade80",
-                  border: "1px solid rgba(34, 197, 94, 0.25)",
+                  backgroundColor: "#dcfce7",
+                  color: "#166534",
+                  border: "1px solid #bbf7d0",
                 }}>
                   {Math.round(confidence.composite * 100)}% Confidence
                 </span>
@@ -740,11 +452,12 @@ export function AskBox({ id }: { id?: string }) {
               {hallucination && (
                 <span style={{
                   fontSize: "11px",
+                  fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "999px",
-                  backgroundColor: hallucination.score <= 0.25 ? "rgba(59, 130, 246, 0.12)" : "rgba(234, 179, 8, 0.12)",
-                  color: hallucination.score <= 0.25 ? "#60a5fa" : "#facc15",
-                  border: hallucination.score <= 0.25 ? "1px solid rgba(59, 130, 246, 0.25)" : "1px solid rgba(234, 179, 8, 0.25)",
+                  backgroundColor: hallucination.score <= 0.25 ? "#dbeafe" : "#fef9c3",
+                  color: hallucination.score <= 0.25 ? "#1e40af" : "#854d0e",
+                  border: hallucination.score <= 0.25 ? "1px solid #bfdbfe" : "1px solid #fef08a",
                 }}>
                   {hallucination.score <= 0.25 ? "✓ Grounded" : `${Math.round(hallucination.score * 100)}% Hallucination Risk`}
                 </span>
@@ -764,13 +477,13 @@ export function AskBox({ id }: { id?: string }) {
               style={{
                 background: "none",
                 border: "none",
-                color: "rgba(255, 255, 255, 0.4)",
+                color: "#94a3b8",
                 cursor: "pointer",
                 padding: "4px",
                 fontSize: "14px",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255, 255, 255, 0.4)")}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#0f172a")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
             >
               ✕
             </button>
@@ -784,11 +497,11 @@ export function AskBox({ id }: { id?: string }) {
               gap: "8px",
               padding: "10px 14px",
               borderRadius: "12px",
-              backgroundColor: "rgba(255, 255, 255, 0.03)",
-              border: "1px solid rgba(255, 255, 255, 0.06)",
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0",
             }}>
               {steps.map((st, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.6875rem", color: st.status === "completed" ? "rgba(255, 255, 255, 0.8)" : "#60a5fa" }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.6875rem", fontWeight: 500, color: st.status === "completed" ? "#334155" : "#4f46e5" }}>
                   <span>{st.status === "completed" ? "✓" : "●"}</span>
                   <span>{st.step}</span>
                 </div>
@@ -801,9 +514,9 @@ export function AskBox({ id }: { id?: string }) {
             <div style={{
               padding: "16px",
               borderRadius: "12px",
-              backgroundColor: "rgba(239, 68, 68, 0.1)",
-              border: "1px solid rgba(239, 68, 68, 0.3)",
-              color: "#fca5a5",
+              backgroundColor: "#fee2e2",
+              border: "1px solid #fecaca",
+              color: "#991b1b",
               display: "flex",
               flexDirection: "column",
               gap: "8px",
@@ -816,11 +529,11 @@ export function AskBox({ id }: { id?: string }) {
                 </svg>
                 <span>Query Failed {error.code ? `(${error.code})` : ""}</span>
               </div>
-              <div style={{ fontSize: "13px", color: "rgba(255, 255, 255, 0.8)" }}>
+              <div style={{ fontSize: "13px", color: "#7f1d1d" }}>
                 {error.message}
               </div>
               {error.message.includes("API keys configured") && (
-                <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.6)", marginTop: "4px" }}>
+                <div style={{ fontSize: "12px", color: "#991b1b", marginTop: "4px" }}>
                   💡 Tip: Add your <code>ANTHROPIC_API_KEY</code>, <code>GROQ_API_KEY</code>, or <code>OPENAI_API_KEY</code> to the <code>.env</code> file in your workspace, or choose <em>Ollama (Local)</em> from the model menu.
                 </div>
               )}
@@ -832,9 +545,9 @@ export function AskBox({ id }: { id?: string }) {
             <div style={{
               padding: "16px",
               borderRadius: "12px",
-              backgroundColor: "rgba(245, 158, 11, 0.1)",
-              border: "1px solid rgba(245, 158, 11, 0.3)",
-              color: "#fde68a",
+              backgroundColor: "#fffbeb",
+              border: "1px solid #fde68a",
+              color: "#92400e",
               display: "flex",
               flexDirection: "column",
               gap: "8px",
@@ -847,11 +560,11 @@ export function AskBox({ id }: { id?: string }) {
                 </svg>
                 <span>No Grounded Passages Found</span>
               </div>
-              <div style={{ fontSize: "13px", color: "rgba(255, 255, 255, 0.85)" }}>
+              <div style={{ fontSize: "13px", color: "#78350f" }}>
                 {abstention.missing}
               </div>
               {abstention.found.length > 0 && (
-                <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.55)" }}>
+                <div style={{ fontSize: "12px", color: "#b45309" }}>
                   Documents searched: {abstention.found.join(", ")}
                 </div>
               )}
@@ -864,8 +577,8 @@ export function AskBox({ id }: { id?: string }) {
                     gap: "6px",
                     padding: "6px 12px",
                     borderRadius: "6px",
-                    backgroundColor: "#ffffff",
-                    color: "#000000",
+                    backgroundColor: "#4f46e5",
+                    color: "#ffffff",
                     fontWeight: 600,
                     fontSize: "12px",
                     textDecoration: "none",
@@ -882,7 +595,7 @@ export function AskBox({ id }: { id?: string }) {
             <div style={{
               fontSize: "0.9375rem",
               lineHeight: 1.7,
-              color: "#ffffff",
+              color: "#0f172a",
               whiteSpace: "pre-line",
             }}>
               {streamedAnswer}
@@ -891,7 +604,7 @@ export function AskBox({ id }: { id?: string }) {
                   display: "inline-block",
                   width: "6px",
                   height: "15px",
-                  backgroundColor: "#60a5fa",
+                  backgroundColor: "#4f46e5",
                   marginLeft: "4px",
                   verticalAlign: "middle",
                   animation: "pulse 1s infinite",
@@ -902,8 +615,8 @@ export function AskBox({ id }: { id?: string }) {
 
           {/* Citations badges */}
           {citations.length > 0 && (
-            <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.08)", paddingTop: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <span style={{ fontSize: "0.6875rem", color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <span style={{ fontSize: "0.6875rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Verified Citations ({citations.length})
               </span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -918,17 +631,17 @@ export function AskBox({ id }: { id?: string }) {
                       gap: "6px",
                       padding: "5px 12px",
                       borderRadius: "8px",
-                      backgroundColor: selectedCitation?.index === c.index ? "rgba(59, 130, 246, 0.25)" : "rgba(255, 255, 255, 0.06)",
-                      border: selectedCitation?.index === c.index ? "1px solid #3b82f6" : "1px solid rgba(255, 255, 255, 0.1)",
-                      color: "#ffffff",
+                      backgroundColor: selectedCitation?.index === c.index ? "#e0e7ff" : "#f1f5f9",
+                      border: selectedCitation?.index === c.index ? "1px solid #4f46e5" : "1px solid #e2e8f0",
+                      color: selectedCitation?.index === c.index ? "#3730a3" : "#0f172a",
                       fontSize: "0.75rem",
                       cursor: "pointer",
                       textAlign: "left",
                     }}
                   >
-                    <span style={{ fontWeight: 600, color: "#60a5fa" }}>[{c.index}]</span>
-                    <span>{c.source}</span>
-                    {c.page && <span style={{ opacity: 0.5 }}>p.{c.page}</span>}
+                    <span style={{ fontWeight: 700, color: "#4f46e5" }}>[{c.index}]</span>
+                    <span style={{ fontWeight: 500 }}>{c.source}</span>
+                    {c.page && <span style={{ opacity: 0.6 }}>p.{c.page}</span>}
                     {c.verdict && (
                       <span
                         style={{
@@ -936,7 +649,7 @@ export function AskBox({ id }: { id?: string }) {
                           width: "6px",
                           height: "6px",
                           borderRadius: "50%",
-                          backgroundColor: c.verdict === "supported" ? "#22c55e" : "#eab308",
+                          backgroundColor: c.verdict === "supported" ? "#16a34a" : "#d97706",
                           marginLeft: "2px",
                         }}
                         title={`Status: ${c.verdict}`}
@@ -952,18 +665,18 @@ export function AskBox({ id }: { id?: string }) {
                   marginTop: "8px",
                   padding: "14px 16px",
                   borderRadius: "10px",
-                  backgroundColor: "rgba(0, 0, 0, 0.45)",
-                  border: "1px solid rgba(59, 130, 246, 0.35)",
+                  backgroundColor: "#f8fafc",
+                  border: "1px solid #c7d2fe",
                   fontSize: "0.8125rem",
-                  color: "rgba(255, 255, 255, 0.88)",
+                  color: "#0f172a",
                 }}>
-                  <div style={{ fontWeight: 600, color: "#60a5fa", marginBottom: "6px", display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ fontWeight: 600, color: "#4f46e5", marginBottom: "6px", display: "flex", justifyContent: "space-between" }}>
                     <span>
                       Evidence [{selectedCitation.index}]: {selectedCitation.source} {selectedCitation.section && `• ${selectedCitation.section}`}
                     </span>
                     {selectedCitation.page && <span>Page {selectedCitation.page}</span>}
                   </div>
-                  <div style={{ fontStyle: "italic", color: "rgba(255, 255, 255, 0.8)", lineHeight: 1.5 }}>
+                  <div style={{ fontStyle: "italic", color: "#334155", lineHeight: 1.5 }}>
                     &ldquo;{selectedCitation.snippet || "Direct evidence excerpt anchored by cryptographic chunk hash."}&rdquo;
                   </div>
                 </div>

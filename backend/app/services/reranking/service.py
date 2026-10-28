@@ -41,8 +41,8 @@ class LLMReranker(Reranker):
     async def rerank(self, query: str, candidates: list[str], top_n: int) -> list[int]:
         if not candidates:
             return []
-        if len(candidates) <= 1:
-            return [0]
+        if len(candidates) <= 2:
+            return list(range(min(top_n, len(candidates))))
 
         from app.services.llm_gateway.service import get_llm_gateway
 

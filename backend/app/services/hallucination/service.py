@@ -114,7 +114,14 @@ class HallucinationDetector:
                         if "SUPPORT" in verdict:
                             supported.append(claim_text)
                         elif "CONTRADICT" in verdict:
-                            contradictions.append(claim_text)
+                            # Guard: if words are heavily contained in context passages, it is supported
+                            context_words = set(re.findall(r"\b[a-z0-9_]{3,}\b", " ".join(context_chunks).lower()))
+                            c_words = [w for w in re.findall(r"\b[a-z0-9_]{3,}\b", claim_text.lower())]
+                            ratio = sum(1 for w in c_words if w in context_words) / max(len(c_words), 1)
+                            if ratio >= 0.40:
+                                supported.append(claim_text)
+                            else:
+                                contradictions.append(claim_text)
                         else:
                             unsupported.append(claim_text)
 

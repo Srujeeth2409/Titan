@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # LLM routing
     default_llm_provider: str = "ollama"
-    default_model: str = "qwen2.5:7b"
+    default_model: str = "qwen2.5:1.5b"
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     groq_api_key: str | None = None
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     # Retrieval defaults — tunable per experiment via the Experiment
     # Management service without redeploying.
     default_chunk_strategy: str = "recursive"
-    default_embedding_model: str = "bge-base-en-v1.5"
+    default_embedding_model: str = "bge-small-en-v1.5"
     default_top_k: int = 20
     default_rerank_top_n: int = 6
 

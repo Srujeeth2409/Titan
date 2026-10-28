@@ -1,6 +1,6 @@
-export function cn(...inputs: any[]): string {
-  return inputs
-    .flat()
-    .filter((x) => typeof x === "string" && x.length > 0)
-    .join(" ");
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 }
