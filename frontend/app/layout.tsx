@@ -2,14 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Titan — Document Intelligence",
+  title: "Titan — RAG System",
   description:
     "Your knowledge is scattered across a hundred documents. Titan reads them all, finds the answer, and shows you exactly where it came from — every time.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1420",
-  colorScheme: "dark",
+  themeColor: "#ffffff",
+  colorScheme: "light",
 };
 
 import { AuthProvider } from "@/lib/auth-context";

@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # LLM routing
     default_llm_provider: str = "ollama"
-    default_model: str = "qwen2.5:1.5b"
+    default_model: str = "qwen2.5:3b"
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     groq_api_key: str | None = None

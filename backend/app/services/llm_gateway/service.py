@@ -38,6 +38,19 @@ class LLMGateway:
         self.openrouter_key = settings.openrouter_api_key
         self.ollama_base_url = settings.ollama_base_url.rstrip("/")
 
+    async def get_installed_ollama_models(self) -> list[str]:
+        """Fetch list of model names currently pulled in local Ollama."""
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                res = await client.get(f"{self.ollama_base_url}/api/tags")
+                if res.status_code == 200:
+                    data = res.json()
+                    models = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+                    return models
+        except Exception as e:
+            print(f"[LLMGateway] Ollama tags check failed: {e}")
+        return []
+
     async def stream_generate(
         self,
         system_prompt: str,
@@ -51,6 +64,7 @@ class LLMGateway:
         Tiers:
           - Strong: Llama 3.3 70B (Groq) or Claude 3.5 Sonnet
           - Fast: Qwen 2.5 32B or Gemma 2 9B (Groq)
+          - Local: Ollama (Qwen 2.5 3B / 1.5B with auto-discovery)
           - Overflow / Backup: OpenRouter (:free models)
         """
         selected_provider = (provider or settings.default_llm_provider).lower()
@@ -88,12 +102,80 @@ class LLMGateway:
                 yield token
             return
 
-        # 3. Local Ollama / Qwen
+        # 3. Local Ollama / Qwen with resilient multi-tier fallback
         if "ollama" in selected_provider or "local" in selected_provider:
-            target_model = model or settings.default_model or "qwen2.5:1.5b"
-            async for token in self._stream_ollama(system_prompt, user_prompt, target_model):
-                yield token
-            return
+            target_model = model or settings.default_model or "qwen2.5:3b"
+            ollama_error = None
+            try:
+                async for token in self._stream_ollama(system_prompt, user_prompt, target_model):
+                    yield token
+                return
+            except Exception as e:
+                ollama_error = e
+                print(f"[LLMGateway] Primary Ollama model '{target_model}' failed ({e}). Checking local model fallbacks...")
+
+            # Tier 3a: Discover what models are actually installed in Ollama
+            installed = await self.get_installed_ollama_models()
+            alt_model = None
+            if installed:
+                # Priority: qwen2.5:1.5b, or any other qwen, or any llama/mistral, or first available
+                candidates = [
+                    m for m in installed
+                    if m != target_model and any(k in m.lower() for k in ["qwen2.5:1.5b", "qwen", "llama", "mistral", "gemma", "phi"])
+                ]
+                alt_model = candidates[0] if candidates else (installed[0] if installed[0] != target_model else None)
+
+            if alt_model:
+                try:
+                    yield f"> *[Notice: Local model '{target_model}' not found in Ollama. Automatically falling back to installed '{alt_model}']*\n\n"
+                    async for token in self._stream_ollama(system_prompt, user_prompt, alt_model):
+                        yield token
+                    return
+                except Exception as alt_err:
+                    print(f"[LLMGateway] Fallback to installed Ollama model '{alt_model}' also failed: {alt_err}")
+
+            # Tier 3b: Fallover to Cloud API if any key is configured
+            if self.groq_key:
+                try:
+                    yield f"> *[Notice: Ollama '{target_model}' unavailable. Falling back to Groq]*\n\n"
+                    async for token in self._stream_groq(system_prompt, user_prompt, "llama-3.3-70b-versatile", max_tokens):
+                        yield token
+                    return
+                except Exception as groq_err:
+                    print(f"[LLMGateway] Groq failover failed: {groq_err}")
+
+            if self.openrouter_key:
+                try:
+                    yield f"> *[Notice: Ollama '{target_model}' unavailable. Falling back to OpenRouter]*\n\n"
+                    async for token in self._stream_openrouter(system_prompt, user_prompt, "meta-llama/llama-3.3-70b-instruct:free", max_tokens):
+                        yield token
+                    return
+                except Exception as or_err:
+                    print(f"[LLMGateway] OpenRouter failover failed: {or_err}")
+
+            if self.openai_key:
+                try:
+                    yield f"> *[Notice: Ollama '{target_model}' unavailable. Falling back to OpenAI]*\n\n"
+                    async for token in self._stream_openai(system_prompt, user_prompt, "gpt-4o", max_tokens):
+                        yield token
+                    return
+                except Exception as oai_err:
+                    print(f"[LLMGateway] OpenAI failover failed: {oai_err}")
+
+            if self.anthropic_key:
+                try:
+                    yield f"> *[Notice: Ollama '{target_model}' unavailable. Falling back to Claude]*\n\n"
+                    async for token in self._stream_anthropic(system_prompt, user_prompt, "claude-3-5-sonnet-20241022", max_tokens):
+                        yield token
+                    return
+                except Exception as ant_err:
+                    print(f"[LLMGateway] Anthropic failover failed: {ant_err}")
+
+            # If all failed, re-raise with clear instructions so extractive fallback kicks in
+            raise RuntimeError(
+                f"Ollama model '{target_model}' is not installed locally. "
+                f"Run `ollama pull {target_model}` in your terminal, or configure GROQ_API_KEY / OPENROUTER_API_KEY in .env."
+            )
 
         # 4. OpenAI
         if "openai" in selected_provider or "gpt" in selected_provider:
@@ -182,7 +264,7 @@ class LLMGateway:
         headers = {
             "Authorization": f"Bearer {self.openrouter_key}",
             "HTTP-Referer": "http://localhost:3000",
-            "X-Title": "Titan Document Intelligence",
+            "X-Title": "Titan RAG System",
             "Content-Type": "application/json",
         }
         payload = {

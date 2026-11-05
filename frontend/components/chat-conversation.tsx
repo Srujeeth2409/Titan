@@ -72,7 +72,7 @@ export function ChatConversation({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const models = [
-    { id: "qwen2.5:1.5b", name: "Ollama (Local 1.5B)", tier: "Local 1.5B", provider: "ollama" },
+    { id: "qwen2.5:3b", name: "Ollama (Local 3B)", tier: "Local 3B", provider: "ollama" },
     { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", tier: "Strong", provider: "anthropic" },
     { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B (Groq)", tier: "Fast & Free", provider: "groq" },
     { id: "qwen-2.5-32b", name: "Qwen 2.5 32B (Groq)", tier: "Fast", provider: "groq" },
