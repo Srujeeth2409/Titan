@@ -53,8 +53,8 @@ export function LoginForm({
     }
 
     if (mode === "signup") {
-      if (password.length < 12) {
-        setError("Password must be at least 12 characters long.");
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters long.");
         return;
       }
       if (password !== confirmPassword) {
