@@ -471,6 +471,52 @@ export interface EmailItem {
 
 const EMAIL_STORAGE_KEY = "titan_corporate_emails";
 
+let activeMailChannel: any = null;
+
+export function getSubscribedMailChannel() {
+  if (!isSupabaseConfigured || !supabase) return null;
+  if (!activeMailChannel) {
+    activeMailChannel = supabase.channel("titan_corporate_mail", {
+      config: { broadcast: { self: false } },
+    });
+    activeMailChannel.subscribe((status: string) => {
+      // Channel subscribed
+    });
+  }
+  return activeMailChannel;
+}
+
+export async function broadcastMail(event: string, payload: any) {
+  const channel = getSubscribedMailChannel();
+  if (!channel) return;
+  try {
+    if (channel.state === "joined") {
+      await channel.send({ type: "broadcast", event, payload });
+    } else {
+      channel.subscribe(async (status: string) => {
+        if (status === "SUBSCRIBED") {
+          await channel.send({ type: "broadcast", event, payload });
+        }
+      });
+    }
+  } catch (err) {
+    console.warn("Mail broadcast error:", err);
+  }
+}
+
+export function isMailForUser(emailItem: EmailItem, currentEmail: string): boolean {
+  const myEmail = (currentEmail || "").toLowerCase().trim();
+  const senderEmail = (emailItem.sender_email || "").toLowerCase().trim();
+
+  // If this user sent the email, it belongs in Sent, not Inbox
+  if (myEmail && senderEmail && myEmail === senderEmail) {
+    return false;
+  }
+
+  // Any other active user receives the email into Inbox
+  return true;
+}
+
 function getStoredCurrentUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
   try {
@@ -491,7 +537,7 @@ export function getStoredEmails(): EmailItem[] {
           id: "mail-init-1",
           sender_email: "alex.chen@titan.com",
           sender_name: "Alex Chen (Lead AI Architect)",
-          recipient_emails: ["srujeethvisinigiri@titan.com", "srujeethvisnigiri@gmail.com"],
+          recipient_emails: ["srujeethvisinigiri@titan.com", "srujeethvisnigiri@gmail.com", "user2@titan.com"],
           subject: "Titan Knowledge Base & Neural RAG Index Ready",
           body_text: "Welcome to Titan Enterprise Workspace!\n\nThe vector embeddings and Qdrant collections have been indexed. You can now execute hybrid retrieval, generate grounded reports with inline citations, and start real-time video conferences or team chat.",
           body_html: "<p>Welcome to <strong>Titan Enterprise Workspace</strong>!</p><p>The vector embeddings and Qdrant collections have been indexed.</p>",
@@ -507,7 +553,7 @@ export function getStoredEmails(): EmailItem[] {
           id: "mail-init-2",
           sender_email: "finance@titan.com",
           sender_name: "Titan Executive Operations",
-          recipient_emails: ["srujeethvisinigiri@titan.com", "srujeethvisnigiri@gmail.com"],
+          recipient_emails: ["srujeethvisinigiri@titan.com", "srujeethvisnigiri@gmail.com", "user2@titan.com"],
           subject: "Q4 Performance & Financial Resource Report Attached",
           body_text: "Attached is the quarterly breakdown synthesized by our RAG model.\n\nReview the key KPIs, revenue trends, and hardware benchmarks.",
           body_html: "<p>Attached is the quarterly breakdown synthesized by our RAG model.</p>",
@@ -539,48 +585,70 @@ export function saveStoredEmails(emails: EmailItem[]): void {
 }
 
 export async function apiGetEmails(folder = "inbox", q = ""): Promise<{ items: EmailItem[]; total: number }> {
+  const me = getStoredCurrentUser();
+  const myEmail = (me?.email || "").toLowerCase().trim();
+
+  // 1. Try Next.js API route on same domain (shared across all users on Vercel)
+  try {
+    const res = await fetch(`/api/mail?folder=${encodeURIComponent(folder)}&email=${encodeURIComponent(myEmail)}&q=${encodeURIComponent(q)}`, {
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const cloudData = await res.json();
+      if (cloudData.items && cloudData.items.length > 0) {
+        // Merge with local storage
+        const currentLocal = getStoredEmails();
+        const merged = [...currentLocal];
+        for (const item of cloudData.items) {
+          if (!merged.some((m) => m.id === item.id)) {
+            // Assign appropriate folder from user perspective
+            const itemFolder = item.sender_email?.toLowerCase().trim() === myEmail ? "sent" : "inbox";
+            merged.unshift({ ...item, folder: item.folder === "sent" && itemFolder === "inbox" ? "inbox" : item.folder });
+          }
+        }
+        saveStoredEmails(merged);
+      }
+    }
+  } catch {}
+
+  // 2. Try FastAPI backend if running locally
   try {
     const query = new URLSearchParams({ folder });
     if (q) query.set("q", q);
     return await apiFetch(`${API_URL}/v1/mail?${query.toString()}`);
-  } catch {
-    const all = getStoredEmails();
-    const me = getStoredCurrentUser();
-    const myEmail = (me?.email || "").toLowerCase().trim();
+  } catch {}
 
-    let filtered = all.filter((m) => {
-      if (folder === "starred") return m.is_starred;
-      if (m.folder !== folder) return false;
+  // 3. Resilient local + shared store filtering
+  const all = getStoredEmails();
 
-      // Filter by user perspective so recipients receive their mail and senders see sent mail
-      if (folder === "sent") {
-        if (!myEmail) return true;
-        return m.sender_email.toLowerCase().trim() === myEmail;
-      }
-      if (folder === "inbox") {
-        if (!myEmail) return true;
-        const recipients = (m.recipient_emails || []).map((e) => e.toLowerCase().trim());
-        const ccs = (m.cc_emails || []).map((e) => e.toLowerCase().trim());
-        const bccs = (m.bcc_emails || []).map((e) => e.toLowerCase().trim());
-        return recipients.includes(myEmail) || ccs.includes(myEmail) || bccs.includes(myEmail);
-      }
-      return true;
-    });
+  let filtered = all.filter((m) => {
+    if (folder === "starred") return m.is_starred;
 
-    if (q) {
-      const queryLower = q.toLowerCase();
-      filtered = filtered.filter(
-        (m) =>
-          m.subject.toLowerCase().includes(queryLower) ||
-          m.body_text.toLowerCase().includes(queryLower) ||
-          m.sender_name.toLowerCase().includes(queryLower) ||
-          m.sender_email.toLowerCase().includes(queryLower)
-      );
+    // Filter by user perspective: sender sees 'sent', recipient sees 'inbox'
+    if (folder === "sent") {
+      if (!myEmail) return true;
+      return (m.sender_email || "").toLowerCase().trim() === myEmail;
     }
+    if (folder === "inbox") {
+      if (!myEmail) return true;
+      return isMailForUser(m, myEmail);
+    }
+    return m.folder === folder;
+  });
 
-    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return { items: filtered, total: filtered.length };
+  if (q) {
+    const queryLower = q.toLowerCase();
+    filtered = filtered.filter(
+      (m) =>
+        m.subject.toLowerCase().includes(queryLower) ||
+        m.body_text.toLowerCase().includes(queryLower) ||
+        m.sender_name.toLowerCase().includes(queryLower) ||
+        m.sender_email.toLowerCase().includes(queryLower)
+    );
   }
+
+  filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return { items: filtered, total: filtered.length };
 }
 
 export async function apiGetMailCounts(): Promise<Record<string, number>> {
@@ -591,18 +659,8 @@ export async function apiGetMailCounts(): Promise<Record<string, number>> {
     const me = getStoredCurrentUser();
     const myEmail = (me?.email || "").toLowerCase().trim();
 
-    const inboxMails = all.filter((m) => {
-      if (m.folder !== "inbox") return false;
-      if (!myEmail) return true;
-      const recipients = (m.recipient_emails || []).map((e) => e.toLowerCase().trim());
-      return recipients.includes(myEmail);
-    });
-
-    const sentMails = all.filter((m) => {
-      if (m.folder !== "sent") return false;
-      if (!myEmail) return true;
-      return m.sender_email.toLowerCase().trim() === myEmail;
-    });
+    const inboxMails = all.filter((m) => isMailForUser(m, myEmail));
+    const sentMails = all.filter((m) => (m.sender_email || "").toLowerCase().trim() === myEmail);
 
     return {
       inbox: inboxMails.length,
@@ -660,7 +718,16 @@ export async function apiSendEmail(payload: {
     created_at: new Date().toISOString(),
   };
 
-  // 1. Try sending to backend
+  // 1. Post to Next.js API route on same domain (instant cloud synchronization across all users)
+  try {
+    await fetch("/api/mail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(emailItem),
+    });
+  } catch {}
+
+  // 2. Try sending to FastAPI backend
   let res: any = null;
   try {
     res = await apiFetch(`${API_URL}/v1/mail/send`, {
@@ -671,23 +738,14 @@ export async function apiSendEmail(payload: {
     res = { status: "sent", id: emailItem.id };
   }
 
-  // 2. Persist locally for sender
+  // 3. Persist locally for sender
   const current = getStoredEmails();
   const filtered = current.filter((m) => m.id !== emailItem.id);
   saveStoredEmails([emailItem, ...filtered]);
 
-  // 3. Broadcast real-time delivery via Supabase across all browsers
-  if (isSupabaseConfigured && supabase && !payload.is_draft) {
-    try {
-      const channel = supabase.channel("titan_corporate_mail");
-      await channel.send({
-        type: "broadcast",
-        event: "new-email",
-        payload: emailItem,
-      });
-    } catch (broadcastErr) {
-      console.warn("Mail broadcast notice:", broadcastErr);
-    }
+  // 4. Instant Realtime Broadcast to all connected peers via Supabase
+  if (!payload.is_draft) {
+    broadcastMail("new-email", emailItem);
   }
 
   return res;

@@ -11,6 +11,9 @@ import {
   apiGetEmployees,
   getStoredEmails,
   saveStoredEmails,
+  isMailForUser,
+  broadcastMail,
+  getSubscribedMailChannel,
   EmailItem,
   EmployeeItem,
 } from "@/lib/api";
@@ -234,29 +237,24 @@ export default function MailPage() {
     }
   }, [searchParams]);
 
-  // 2. Real-time Mail Delivery via Supabase (Cross-user, multi-device, zero collisions)
+  const mailChannelRef = useRef<any>(null);
+
+  // 2. Real-time Mail Delivery & Cross-Computer Sync via Supabase
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
     const myEmail = (user?.email || "").toLowerCase().trim();
-    const mailChannel = supabase.channel("titan_corporate_mail");
+    const mailChannel = getSubscribedMailChannel() || supabase.channel("titan_corporate_mail", {
+      config: { broadcast: { self: false } },
+    });
+    mailChannelRef.current = mailChannel;
 
     mailChannel
-      .on("broadcast", { event: "new-email" }, ({ payload }) => {
+      .on("broadcast", { event: "new-email" }, ({ payload }: { payload: any }) => {
         if (!payload || !payload.id) return;
 
-        const recipients = (payload.recipient_emails || []).map((e: string) => e.toLowerCase().trim());
-        const ccs = (payload.cc_emails || []).map((e: string) => e.toLowerCase().trim());
-        const bccs = (payload.bcc_emails || []).map((e: string) => e.toLowerCase().trim());
-        const sender = (payload.sender_email || "").toLowerCase().trim();
-
-        // Check if current user is recipient (or demo fallback)
-        const isRecipient = myEmail
-          ? recipients.includes(myEmail) || ccs.includes(myEmail) || bccs.includes(myEmail)
-          : true;
-        const isSender = myEmail ? sender === myEmail : false;
-
-        if (isRecipient && !isSender) {
+        // Check if this incoming email is meant for this user (not the sender)
+        if (isMailForUser(payload, myEmail)) {
           const receivedItem: EmailItem = {
             ...payload,
             folder: "inbox",
@@ -285,10 +283,47 @@ export default function MailPage() {
           setToast(`📬 New email from ${payload.sender_name}: "${payload.subject}"`);
         }
       })
-      .subscribe();
+      .on("broadcast", { event: "request-sync" }, () => {
+        // When a peer connects, share our known stored emails
+        const current = getStoredEmails();
+        if (current.length > 0 && mailChannel.state === "joined") {
+          mailChannel.send({
+            type: "broadcast",
+            event: "sync-response",
+            payload: { emails: current },
+          });
+        }
+      })
+      .on("broadcast", { event: "sync-response" }, ({ payload }: { payload: any }) => {
+        if (payload?.emails && Array.isArray(payload.emails)) {
+          const current = getStoredEmails();
+          const merged = [...current];
+          let added = false;
+          for (const item of payload.emails) {
+            if (!merged.some((m) => m.id === item.id) && isMailForUser(item, myEmail)) {
+              merged.unshift({ ...item, folder: "inbox", is_read: false });
+              added = true;
+            }
+          }
+          if (added) {
+            saveStoredEmails(merged);
+            loadMailData(true);
+          }
+        }
+      })
+      .subscribe((status: string) => {
+        if (status === "SUBSCRIBED") {
+          // Request any missed emails from online peers
+          mailChannel.send({
+            type: "broadcast",
+            event: "request-sync",
+            payload: { email: myEmail },
+          });
+        }
+      });
 
     return () => {
-      mailChannel.unsubscribe();
+      // Keep channel alive for instant deliveries
     };
   }, [user?.email]);
 
@@ -299,12 +334,29 @@ export default function MailPage() {
       .catch(() => {});
   }, []);
 
+  // Periodic background check & window focus sync (every 3 seconds)
   useEffect(() => {
     loadMailData();
+
+    const interval = setInterval(() => {
+      loadMailData(true);
+    }, 3000);
+
+    const onFocus = () => loadMailData(true);
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onFocus);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", onFocus);
+      }
+    };
   }, [folder]);
 
-  const loadMailData = async () => {
-    setLoading(true);
+  const loadMailData = async (background = false) => {
+    if (!background) setLoading(true);
     try {
       const [mailData, countData] = await Promise.all([
         apiGetEmails(folder, searchQuery),
@@ -312,13 +364,13 @@ export default function MailPage() {
       ]);
       setEmails(mailData.items || []);
       setCounts(countData || {});
-      if (mailData.items && mailData.items.length > 0 && !selectedMail) {
+      if (mailData.items && mailData.items.length > 0 && !selectedMail && !background) {
         setSelectedMail(mailData.items[0]);
       }
     } catch (err) {
       console.error("Failed to load mail:", err);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 
@@ -406,6 +458,33 @@ export default function MailPage() {
         attachments: attachMeta,
         is_draft: asDraft,
       });
+
+      // Dual-channel direct transmission if page channel is active
+      if (!asDraft && mailChannelRef.current?.state === "joined") {
+        try {
+          const directItem: EmailItem = {
+            id: `mail-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            sender_email: user?.email || "srujeethvisinigiri@titan.com",
+            sender_name: user?.full_name || user?.email?.split("@")[0] || "Team Member",
+            recipient_emails: recipientList,
+            cc_emails: ccList,
+            bcc_emails: bccList,
+            subject: subjectInput || "(No Subject)",
+            body_text: bodyInput,
+            body_html: `<p>${bodyInput.replace(/\n/g, "<br/>")}</p>`,
+            folder: "inbox",
+            is_read: false,
+            is_starred: false,
+            attachments: attachMeta,
+            created_at: new Date().toISOString(),
+          };
+          await mailChannelRef.current.send({
+            type: "broadcast",
+            event: "new-email",
+            payload: directItem,
+          });
+        } catch {}
+      }
 
       const action = asDraft ? "Draft saved" : "Email sent";
       const recipientNames = recipientList
