@@ -165,9 +165,11 @@ async def ask(
         citations = citation_engine.build_citations(answer_text, chunks)
 
         hallucination_detector = get_hallucination_detector()
+        is_deep = "max" in (body.effort or "medium").lower() or "high" in (body.effort or "medium").lower()
         hall_report = await hallucination_detector.check(
             answer=answer_text,
             context_chunks=[c.text for c in chunks],
+            fast_mode=not is_deep,
         )
 
         confidence = _calculate_confidence(chunks, citations, hall_report.score)
@@ -237,11 +239,34 @@ async def ask_stream(
             query_vector = query_vectors[0]
             yield f"data: {json.dumps({'type': 'step_completed', 'data': {'step': 'Embedding query with FastEmbed BGE'}})}\n\n"
 
+            # Effort tuning: adjustments to retrieval depth and generation instructions
+            effort_mode = (body.effort or "Medium").lower()
+            if "low" in effort_mode:
+                top_m = min(body.options.top_m if body.options and body.options.top_m else 4, 4)
+                effort_instruction = (
+                    "\n\nEFFORT LEVEL: LOW.\n"
+                    "Provide a rapid, direct, and concise summary answering the question in 2-3 focused paragraphs. "
+                    "Use precise inline citations [1], [2] referencing the source passages."
+                )
+            elif "max" in effort_mode or "high" in effort_mode or "deep" in effort_mode:
+                top_m = max(body.options.top_m if body.options and body.options.top_m else 8, 8)
+                effort_instruction = (
+                    "\n\nEFFORT LEVEL: MAX EFFORT (Deep Reasoning).\n"
+                    "Thoroughly analyze all reference passages. Cross-examine facts, compare details across sections, "
+                    "evaluate nuances, provide exhaustive step-by-step reasoning, and verify every single point with comprehensive "
+                    "inline citations [1], [2] mapped to the passages."
+                )
+            else:
+                top_m = body.options.top_m if body.options and body.options.top_m else 6
+                effort_instruction = (
+                    "\n\nEFFORT LEVEL: MEDIUM.\n"
+                    "Provide a comprehensive, well-structured explanation with clear logical flow and verified inline citations [1], [2]."
+                )
+
             # Event 3: step_started (Hybrid search)
-            search_step_msg = f"Hybrid retrieval on '{body.collection}' (Dense Vector + BM25 Sparse + RRF)"
+            search_step_msg = f"Hybrid retrieval on '{body.collection}' (Dense Vector + BM25 Sparse + RRF) [Effort: {body.effort or 'Medium'}]"
             yield f"data: {json.dumps({'type': 'step_started', 'data': {'step': search_step_msg}})}\n\n"
             retriever = get_retrieval_service()
-            top_m = (body.options.top_m if body.options and body.options.top_m else 6)
             chunks = await retriever.hybrid_search(
                 collection_name=body.collection,
                 query=sanitized_question,
@@ -275,17 +300,19 @@ async def ask_stream(
                 return
 
             # Event 5: step_started (generation with security fencing & resilient fallback)
-            yield f"data: {json.dumps({'type': 'step_started', 'data': {'step': 'Synthesizing verified answer with LLM'}})}\n\n"
+            effort_label = body.effort or "Medium"
+            yield f"data: {json.dumps({'type': 'step_started', 'data': {'step': f'Synthesizing verified answer with LLM [Effort: {effort_label}]'}})}\n\n"
             user_prompt = guardrails.secure_context_prompt(sanitized_question, chunks)
             llm = get_llm_gateway()
 
             answer_tokens = []
             try:
                 async for token in llm.stream_generate(
-                    system_prompt=SYSTEM_PROMPT,
+                    system_prompt=SYSTEM_PROMPT + effort_instruction,
                     user_prompt=user_prompt,
                     provider=body.provider,
                     model=body.model,
+                    effort=body.effort,
                 ):
                     answer_tokens.append(token)
                     yield f"data: {json.dumps({'type': 'token', 'data': {'token': token}})}\n\n"
@@ -318,9 +345,11 @@ async def ask_stream(
             citations = citation_engine.build_citations(full_answer, chunks)
 
             hallucination_detector = get_hallucination_detector()
+            is_deep = "max" in effort_label.lower() or "high" in effort_label.lower()
             hall_report = await hallucination_detector.check(
                 answer=full_answer,
                 context_chunks=[c.text for c in chunks],
+                fast_mode=not is_deep,
             )
             confidence = _calculate_confidence(chunks, citations, hall_report.score)
             yield f"data: {json.dumps({'type': 'step_completed', 'data': {'step': 'Verification and grounding complete'}})}\n\n"

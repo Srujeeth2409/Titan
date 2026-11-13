@@ -122,6 +122,13 @@ async def ingest_document(
 
         # 2. Record Document in PostgreSQL
         doc_id = uuid.uuid4()
+        from pathlib import Path
+        upload_dir = Path("storage/uploads")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        file_path = upload_dir / f"{doc_id}_{file.filename}"
+        file_path.write_bytes(file_bytes)
+        doc_metadata["storage_path"] = str(file_path)
+
         doc = Document(
             id=doc_id,
             filename=file.filename,

@@ -5,8 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { GridPulse } from "@/components/ui/grid-pulse";
+import { GradientBackground } from "@/components/ui/noisy-gradient-backgrounds";
 import { MacOsDock } from "@/components/ui/macos-dock";
 import { WorkstationNavbar } from "@/components/workstation-navbar";
+import { GlobalSearchModal } from "@/components/global-search-modal";
+import { CalculatorModal } from "@/components/calculator-modal";
+import { QuickNotesDrawer } from "@/components/quick-notes-drawer";
 
 export default function WorkspaceLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -69,7 +73,7 @@ export default function WorkspaceLayout({ children }: { children: ReactNode }) {
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
       }}
     >
-      {/* ── Global Background: GridPulse in original cell size (24px) ── */}
+      {/* ── Global Background: Noisy Gradient Background with Interactive GridPulse ── */}
       <div
         style={{
           position: "fixed",
@@ -79,40 +83,44 @@ export default function WorkspaceLayout({ children }: { children: ReactNode }) {
           overflow: "hidden",
         }}
       >
+        {/* Noisy Gradient Background Layer with Sunset Glow / Radial Sunset palette (light tint) */}
+        <GradientBackground
+          gradientOrigin="bottom-middle"
+          colors={[
+            { color: "rgba(245, 87, 2, 0.18)", stop: "10.5%" },
+            { color: "rgba(245, 120, 2, 0.16)", stop: "16%" },
+            { color: "rgba(245, 140, 2, 0.14)", stop: "17.5%" },
+            { color: "rgba(245, 170, 100, 0.18)", stop: "25%" },
+            { color: "rgba(238, 174, 202, 0.28)", stop: "40%" },
+            { color: "rgba(202, 179, 214, 0.35)", stop: "65%" },
+            { color: "rgba(230, 240, 255, 0.85)", stop: "100%" },
+          ]}
+          noiseIntensity={0.65}
+          noisePatternSize={90}
+          noisePatternRefreshInterval={2}
+          noisePatternAlpha={30}
+          className="opacity-95"
+        />
+
+        {/* Interactive GridPulse on top of the Noisy Gradient */}
         <GridPulse
           cell={24}
           reach={2.6}
           ambient={2}
           avoid="[data-grid-avoid]"
-          className="opacity-70"
+          className="opacity-75"
           style={{
-            "--grid-pulse-line": "rgba(0, 0, 0, 0.05)",
+            "--grid-pulse-line": "rgba(99, 102, 241, 0.08)",
           } as React.CSSProperties}
         />
 
-        {/* Ambient atmospheric subtle light gradients */}
+        {/* Subtle Ambient Vignette */}
         <div
           style={{
             position: "absolute",
-            top: "-10%",
-            left: "20%",
-            width: "50vw",
-            height: "40vh",
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(99, 102, 241, 0.035) 0%, transparent 70%)",
-            filter: "blur(60px)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: "5%",
-            right: "15%",
-            width: "40vw",
-            height: "35vh",
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(56, 189, 248, 0.03) 0%, transparent 70%)",
-            filter: "blur(70px)",
+            inset: 0,
+            background: "radial-gradient(ellipse at 50% 0%, transparent 60%, rgba(99, 102, 241, 0.03) 100%)",
+            pointerEvents: "none",
           }}
         />
       </div>
@@ -138,6 +146,11 @@ export default function WorkspaceLayout({ children }: { children: ReactNode }) {
 
       {/* ── macOS Dock with Trash Bin ── */}
       <MacOsDock activeId={activeId} />
+
+      {/* ── Global Overlays ── */}
+      <GlobalSearchModal />
+      <CalculatorModal />
+      <QuickNotesDrawer />
     </div>
   );
 }

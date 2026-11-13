@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Citation, Confidence, HallucinationInfo } from "@/components/ask-box";
+import { Citation, Confidence, HallucinationInfo } from "@/lib/citations";
 
 export interface ChatMessage {
   id: string;

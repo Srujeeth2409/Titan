@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useRef, useMemo } from "react";
 import Link from "next/link";
-import { getDocuments, ingestDocument, TitanApiError } from "@/lib/api";
+import { getDocuments, ingestDocument, getDocumentDownloadUrl, moveDocument, copyDocument, TitanApiError } from "@/lib/api";
 import { HaloDropzone } from "@/components/ui/halo-dropzone";
 import { moveToTrash, useTrash } from "@/lib/trash-store";
+import GlassFolder, { ArtPreset } from "@/components/ui/glass-folder-cards";
 
 interface DocumentItem {
   id: string;
@@ -31,7 +32,70 @@ export default function DocumentsPage() {
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // User-created folders state (folders ONLY appear when created by the user)
+  const [userFolders, setUserFolders] = useState<string[]>([]);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [draggingOverFolder, setDraggingOverFolder] = useState<string | null>(null);
+  const [targetFolderForUpload, setTargetFolderForUpload] = useState<string | null>(null);
+  const folderFileInputRef = useRef<HTMLInputElement>(null);
+
   const { trash } = useTrash();
+
+  // Load custom folders from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("titan_user_folders");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setUserFolders(parsed);
+        }
+      }
+    } catch (e) {
+      console.error("Error loading titan_user_folders:", e);
+    }
+  }, []);
+
+  const handleCreateFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = newFolderName.trim();
+    if (!cleanName) return;
+
+    if (!userFolders.some((f) => f.toLowerCase() === cleanName.toLowerCase())) {
+      const updated = [...userFolders, cleanName];
+      setUserFolders(updated);
+      try {
+        localStorage.setItem("titan_user_folders", JSON.stringify(updated));
+      } catch (err) {
+        console.error(err);
+      }
+      setUploadCollection(cleanName);
+      setSelectedFilter(cleanName);
+      setToastMessage(`Created folder "${cleanName}" and set as active upload target.`);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+    setNewFolderName("");
+    setIsFolderModalOpen(false);
+  };
+
+  const handleDeleteFolder = (folderName: string) => {
+    const updated = userFolders.filter((f) => f.toLowerCase() !== folderName.toLowerCase());
+    setUserFolders(updated);
+    try {
+      localStorage.setItem("titan_user_folders", JSON.stringify(updated));
+    } catch (err) {
+      console.error(err);
+    }
+    if (selectedFilter.toLowerCase() === folderName.toLowerCase()) {
+      setSelectedFilter("all");
+    }
+    if (uploadCollection.toLowerCase() === folderName.toLowerCase()) {
+      setUploadCollection("default");
+    }
+    setToastMessage(`Removed folder "${folderName}".`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const fetchDocs = async () => {
     setLoading(true);
@@ -72,23 +136,26 @@ export default function DocumentsPage() {
     return documents.filter((d) => !trashedIds.has(d.id));
   }, [documents, trash]);
 
-  // Unique collections for filter pills
+  // Unique collections for filter pills (incorporates user folders and collections)
   const availableCollections = useMemo(() => {
     const set = new Set<string>();
     activeDocuments.forEach((d) => {
       if (d.collection) set.add(d.collection);
     });
+    userFolders.forEach((f) => set.add(f));
     return Array.from(set);
-  }, [activeDocuments]);
+  }, [activeDocuments, userFolders]);
 
   // Filtered by collection & search
   const filteredDocuments = useMemo(() => {
     return activeDocuments.filter((d) => {
-      const matchesCol = selectedFilter === "all" || d.collection === selectedFilter;
+      const matchesCol =
+        selectedFilter === "all" ||
+        (d.collection || "").toLowerCase() === selectedFilter.toLowerCase();
       const matchesSearch =
         searchQuery.trim() === "" ||
         d.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.collection.toLowerCase().includes(searchQuery.toLowerCase());
+        (d.collection || "").toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCol && matchesSearch;
     });
   }, [activeDocuments, selectedFilter, searchQuery]);
@@ -106,7 +173,7 @@ export default function DocumentsPage() {
 
     try {
       for (const file of files) {
-        const res = await ingestDocument(file, targetCol);
+        await ingestDocument(file, targetCol);
         successCount++;
         lastResultName = file.name;
       }
@@ -116,6 +183,42 @@ export default function DocumentsPage() {
       } else {
         setUploadSuccess(`Successfully indexed ${successCount} documents into collection "${targetCol}"`);
       }
+      await fetchDocs();
+    } catch (err: any) {
+      if (err instanceof TitanApiError) {
+        setError({ message: err.message, code: err.code, trace_id: err.traceId });
+      } else {
+        setError({ message: err.message || "Document indexing failed." });
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileUploadForFolder = async (files: File[], targetFolder: string) => {
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    setError(null);
+    setUploadSuccess(null);
+
+    const targetCol = targetFolder.trim() || "default";
+    let successCount = 0;
+    let lastResultName = "";
+
+    try {
+      for (const file of files) {
+        await ingestDocument(file, targetCol);
+        successCount++;
+        lastResultName = file.name;
+      }
+
+      if (successCount === 1) {
+        setUploadSuccess(`Successfully dropped and indexed "${lastResultName}" into folder "${targetCol}"`);
+      } else {
+        setUploadSuccess(`Successfully dropped and indexed ${successCount} files into folder "${targetCol}"`);
+      }
+      setSelectedFilter(targetCol);
       await fetchDocs();
     } catch (err: any) {
       if (err instanceof TitanApiError) {
@@ -175,7 +278,7 @@ export default function DocumentsPage() {
         flexDirection: "column",
         alignItems: "center",
         width: "100%",
-        padding: "36px 32px 70px 32px",
+        padding: "36px 32px 180px 32px",
         color: "#0f172a",
       }}
     >
@@ -219,7 +322,7 @@ export default function DocumentsPage() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M4 4a2 2 0 0 1 2-2h4.586a1 1 0 0 1 .707.293l4.414 4.414a1 1 0 0 1 .293.707V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4z" />
               </svg>
-              Corpus Knowledge Base
+              Document Corpus
             </div>
             <h1
               style={{
@@ -270,7 +373,7 @@ export default function DocumentsPage() {
                   letterSpacing: "0.05em",
                 }}
               >
-                Target Collection
+                Target Collection / Folder
               </label>
               <input
                 id="target-collection-input"
@@ -285,7 +388,7 @@ export default function DocumentsPage() {
                   color: "#0f172a",
                   fontSize: "13px",
                   fontWeight: 600,
-                  width: "140px",
+                  width: "160px",
                   padding: "2px 0",
                 }}
               />
@@ -320,7 +423,6 @@ export default function DocumentsPage() {
               fontSize: "13px",
               fontWeight: 500,
               boxShadow: "0 4px 12px rgba(79, 70, 229, 0.1)",
-              animation: "fadeIn 200ms ease",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -392,7 +494,224 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        {/* ── HaloDropzone Integration ── */}
+        {/* ── User-Created Folders Section (ALWAYS ON TOP) ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%", marginTop: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: "#475569",
+                }}
+              >
+                My Folders ({userFolders.length})
+              </span>
+              <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                — Click to view files or drag files from table / desktop below
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsFolderModalOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#4f46e5",
+                background: "#eef2ff",
+                border: "1px solid #c7d2fe",
+                padding: "4px 10px",
+                borderRadius: "6px",
+                cursor: "pointer",
+              }}
+            >
+              + Add Folder
+            </button>
+          </div>
+
+          {userFolders.length > 0 ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: "20px",
+                width: "100%",
+              }}
+            >
+              {userFolders.map((folderName, idx) => {
+                const folderDocs = activeDocuments.filter(
+                  (d) => (d.collection || "").toLowerCase() === folderName.toLowerCase()
+                );
+                const presets: ArtPreset[] = ["aurora", "ember", "dusk", "glacier", "verdant"];
+                const preset = presets[idx % presets.length];
+                const isSelected = selectedFilter.toLowerCase() === folderName.toLowerCase();
+                const isDraggingOver = draggingOverFolder === folderName;
+
+                return (
+                  <div
+                    key={folderName}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.dataTransfer.dropEffect = "copy";
+                      setDraggingOverFolder(folderName);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (draggingOverFolder === folderName) {
+                        setDraggingOverFolder(null);
+                      }
+                    }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDraggingOverFolder(null);
+
+                      // 1. Check if an existing document row was dragged from the table below
+                      const draggedDocId = e.dataTransfer.getData("application/x-titan-doc-id");
+                      const draggedDocName = e.dataTransfer.getData("application/x-titan-doc-name");
+                      if (draggedDocId) {
+                        try {
+                          await copyDocument(draggedDocId, folderName);
+                          setToastMessage(`Copied "${draggedDocName || "document"}" into folder "${folderName}".`);
+                          setTimeout(() => setToastMessage(null), 3500);
+                          await fetchDocs();
+                        } catch (err: any) {
+                          setError({ message: err?.message || "Failed to copy document to folder." });
+                        }
+                        return;
+                      }
+
+                      // 2. Otherwise handle dropped files from the user's OS
+                      const droppedFiles = Array.from(e.dataTransfer.files);
+                      if (droppedFiles.length > 0) {
+                        await handleFileUploadForFolder(droppedFiles, folderName);
+                      }
+                    }}
+                    style={{
+                      cursor: "pointer",
+                      outline: isDraggingOver
+                        ? "2.5px dashed #4f46e5"
+                        : isSelected
+                        ? "2px solid #6366f1"
+                        : "none",
+                      boxShadow: isDraggingOver
+                        ? "0 0 28px rgba(79, 70, 229, 0.45)"
+                        : "none",
+                      borderRadius: "18px",
+                      transform: isDraggingOver ? "scale(1.04)" : "none",
+                      transition: "all 180ms ease",
+                      position: "relative",
+                    }}
+                    onClick={() => {
+                      setSelectedFilter(isSelected ? "all" : folderName);
+                    }}
+                  >
+                    {isDraggingOver && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "-12px",
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          background: "#4f46e5",
+                          color: "#ffffff",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "4px 12px",
+                          borderRadius: "999px",
+                          zIndex: 60,
+                          boxShadow: "0 4px 14px rgba(79, 70, 229, 0.5)",
+                          whiteSpace: "nowrap",
+                          pointerEvents: "none",
+                        }}
+                      >
+                        📥 Drop to add into {folderName}
+                      </div>
+                    )}
+                    <GlassFolder
+                      label={folderName}
+                      meta={`${folderDocs.length} ${folderDocs.length === 1 ? "file" : "files"}`}
+                      art={preset}
+                      tone="light"
+                      action="add"
+                      onAdd={() => {
+                        setTargetFolderForUpload(folderName);
+                        folderFileInputRef.current?.click();
+                      }}
+                      files={folderDocs.map((d) => ({
+                        name: d.filename,
+                        meta: d.chunk_count ? `${d.chunk_count} chunks` : undefined,
+                        href: `/app`,
+                      }))}
+                      menu={[
+                        {
+                          label: "Upload file to this folder…",
+                          onSelect: () => {
+                            setTargetFolderForUpload(folderName);
+                            folderFileInputRef.current?.click();
+                          },
+                        },
+                        {
+                          label: isSelected ? "Show All Documents" : `Filter by "${folderName}"`,
+                          onSelect: () => setSelectedFilter(isSelected ? "all" : folderName),
+                        },
+                        {
+                          label: "Set as Default Upload Target",
+                          onSelect: () => {
+                            setUploadCollection(folderName);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          },
+                        },
+                        {
+                          label: "Delete Folder",
+                          danger: true,
+                          onSelect: () => handleDeleteFolder(folderName),
+                        },
+                      ]}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              onClick={() => setIsFolderModalOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "10px",
+                padding: "24px",
+                borderRadius: "16px",
+                background: "rgba(255, 255, 255, 0.6)",
+                border: "1.5px dashed #cbd5e1",
+                color: "#64748b",
+                fontSize: "13px",
+                cursor: "pointer",
+                transition: "all 150ms ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#4f46e5";
+                e.currentTarget.style.color = "#4f46e5";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#cbd5e1";
+                e.currentTarget.style.color = "#64748b";
+              }}
+            >
+              <span>📁 No folders yet. Click here or "+ Add Folder" to create your first folder</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── HaloDropzone Integration (BELOW FOLDERS) ── */}
         <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
           <HaloDropzone
             accept=".pdf,.docx,.md,.txt,.csv,.json,.log"
@@ -406,6 +725,22 @@ export default function DocumentsPage() {
           />
         </div>
 
+        {/* Hidden input to allow clicking folder to upload from local disk */}
+        <input
+          ref={folderFileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          style={{ display: "none" }}
+          onChange={async (e) => {
+            const files = e.target.files ? Array.from(e.target.files) : [];
+            if (files.length > 0 && targetFolderForUpload) {
+              await handleFileUploadForFolder(files, targetFolderForUpload);
+            }
+            if (e.target) e.target.value = "";
+          }}
+        />
+
         {/* ── Filters & Search Bar ── */}
         <div
           id="collections"
@@ -418,7 +753,7 @@ export default function DocumentsPage() {
             marginTop: "8px",
           }}
         >
-          {/* Collection Pills */}
+          {/* Collection Pills + New Folder Trigger */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <button
               type="button"
@@ -459,6 +794,42 @@ export default function DocumentsPage() {
                 {col}
               </button>
             ))}
+
+            {/* + New Folder Button */}
+            <button
+              type="button"
+              onClick={() => setIsFolderModalOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "5px 12px",
+                borderRadius: "8px",
+                fontSize: "12px",
+                fontWeight: 600,
+                border: "1px dashed #94a3b8",
+                background: "#ffffff",
+                color: "#475569",
+                cursor: "pointer",
+                transition: "all 150ms ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#4f46e5";
+                e.currentTarget.style.color = "#4f46e5";
+                e.currentTarget.style.background = "#f5f3ff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#94a3b8";
+                e.currentTarget.style.color = "#475569";
+                e.currentTarget.style.background = "#ffffff";
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              New Folder
+            </button>
           </div>
 
           {/* Search filter */}
@@ -568,56 +939,94 @@ export default function DocumentsPage() {
               border: "1px solid #e2e8f0",
               overflow: "hidden",
               boxShadow: "0 4px 20px rgba(0, 0, 0, 0.04)",
+              width: "100%",
             }}
           >
-            <table
+            <div
               style={{
                 width: "100%",
-                borderCollapse: "collapse",
-                textAlign: "left",
-                fontSize: "13px",
+                overflowX: "auto",
+                WebkitOverflowScrolling: "touch",
               }}
             >
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    color: "#64748b",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  <th style={{ padding: "14px 20px" }}>Document</th>
-                  <th style={{ padding: "14px 16px" }}>Format</th>
-                  <th style={{ padding: "14px 16px" }}>Collection</th>
-                  <th style={{ padding: "14px 16px" }}>Status</th>
-                  <th style={{ padding: "14px 16px" }}>Chunks</th>
-                  <th style={{ padding: "14px 16px" }}>Uploaded</th>
-                  <th style={{ padding: "14px 20px", textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
+              <table
+                style={{
+                  width: "100%",
+                  minWidth: "860px",
+                  borderCollapse: "collapse",
+                  textAlign: "left",
+                  fontSize: "13px",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "1px solid #e2e8f0",
+                      background: "#f8fafc",
+                      color: "#64748b",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    <th style={{ padding: "14px 20px", minWidth: "260px" }}>Document</th>
+                    <th style={{ padding: "14px 16px", minWidth: "90px" }}>Format</th>
+                    <th style={{ padding: "14px 16px", minWidth: "150px" }}>Collection / Folder</th>
+                    <th style={{ padding: "14px 16px", minWidth: "100px" }}>Status</th>
+                    <th style={{ padding: "14px 16px", minWidth: "90px" }}>Chunks</th>
+                    <th style={{ padding: "14px 16px", minWidth: "110px" }}>Uploaded</th>
+                    <th style={{ padding: "14px 24px", minWidth: "250px", textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
               <tbody>
                 {filteredDocuments.map((doc, idx) => {
                   const badge = getFormatBadgeColor(doc.source_type);
                   return (
                     <tr
                       key={doc.id}
+                      draggable={true}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("application/x-titan-doc-id", doc.id);
+                        e.dataTransfer.setData("application/x-titan-doc-name", doc.filename);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
                       style={{
                         borderBottom:
                           idx === filteredDocuments.length - 1
                             ? "none"
                             : "1px solid #f1f5f9",
                         transition: "background 150ms ease",
+                        cursor: "grab",
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
-                      {/* Document Name */}
+                      {/* Document Name — Draggable handle */}
                       <td style={{ padding: "14px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div
+                          style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                          title="Drag this document onto any folder above to copy it"
+                        >
+                          {/* Drag handle icon indicator */}
+                          <div
+                            style={{
+                              color: "#cbd5e1",
+                              display: "flex",
+                              alignItems: "center",
+                              cursor: "grab",
+                            }}
+                            title="Drag to copy into folder"
+                          >
+                            <svg width="10" height="14" viewBox="0 0 10 16" fill="currentColor">
+                              <circle cx="2" cy="2" r="1.5" />
+                              <circle cx="8" cy="2" r="1.5" />
+                              <circle cx="2" cy="8" r="1.5" />
+                              <circle cx="8" cy="8" r="1.5" />
+                              <circle cx="2" cy="14" r="1.5" />
+                              <circle cx="8" cy="14" r="1.5" />
+                            </svg>
+                          </div>
                           <div
                             style={{
                               width: "28px",
@@ -718,59 +1127,87 @@ export default function DocumentsPage() {
                           : "—"}
                       </td>
 
-                      {/* Actions */}
-                      <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                      {/* Actions: Strictly Ask, Download, Delete */}
+                      <td style={{ padding: "14px 24px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
+                          {/* 1. Ask -> Directly opens chatbox /app with this folder/collection */}
                           <Link
-                            href="/app"
-                            title="Ask questions using this corpus"
+                            href={`/app?collection=${encodeURIComponent(doc.collection || "default")}`}
+                            title={`Ask questions specifically in folder "${doc.collection || "default"}"`}
                             style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
                               color: "#4f46e5",
                               fontSize: "12px",
                               fontWeight: 600,
                               textDecoration: "none",
-                              padding: "4px 10px",
+                              padding: "5px 10px",
                               borderRadius: "6px",
                               background: "#eef2ff",
                               border: "1px solid #c7d2fe",
+                              transition: "all 150ms ease",
                             }}
                           >
-                            Ask →
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                            </svg>
+                            Ask
                           </Link>
 
-                          {/* Move to macOS Dock Trash */}
+                          {/* 2. Download -> Streams original file */}
+                          <a
+                            href={getDocumentDownloadUrl(doc.id)}
+                            download={doc.filename}
+                            title={`Download ${doc.filename}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              color: "#334155",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              textDecoration: "none",
+                              padding: "5px 10px",
+                              borderRadius: "6px",
+                              background: "#f1f5f9",
+                              border: "1px solid #cbd5e1",
+                              transition: "all 150ms ease",
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Download
+                          </a>
+
+                          {/* 3. Delete -> Moves to macOS Dock Trash */}
                           <button
                             type="button"
                             onClick={() => handleMoveToTrash(doc)}
-                            title="Move to macOS Dock Trash"
+                            title="Move to Trash"
                             style={{
                               background: "#fef2f2",
                               border: "1px solid #fecaca",
                               color: "#dc2626",
                               cursor: "pointer",
-                              padding: "5px 9px",
+                              padding: "5px 10px",
                               borderRadius: "6px",
                               display: "inline-flex",
                               alignItems: "center",
                               gap: "4px",
-                              fontSize: "11px",
+                              fontSize: "12px",
                               fontWeight: 600,
                               transition: "all 150ms ease",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = "#fee2e2";
-                              e.currentTarget.style.borderColor = "#fca5a5";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "#fef2f2";
-                              e.currentTarget.style.borderColor = "#fecaca";
                             }}
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <polyline points="3 6 5 6 21 6" />
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                             </svg>
-                            Trash
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -779,6 +1216,116 @@ export default function DocumentsPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+        )}
+
+        {/* ── New Folder Creation Modal ── */}
+        {isFolderModalOpen && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 200,
+              background: "rgba(15, 23, 42, 0.4)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+            }}
+            onClick={() => setIsFolderModalOpen(false)}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "16px",
+                padding: "24px",
+                width: "100%",
+                maxWidth: "400px",
+                boxShadow: "0 20px 40px rgba(0, 0, 0, 0.15)",
+                border: "1px solid #e2e8f0",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a", margin: 0 }}>
+                  Create New Folder
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsFolderModalOpen(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: "16px" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateFolder} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label
+                    htmlFor="new-folder-name-input"
+                    style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "6px" }}
+                  >
+                    Folder / Collection Name
+                  </label>
+                  <input
+                    id="new-folder-name-input"
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="e.g. Policies, Analytics, Specifications..."
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "14px",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsFolderModalOpen(false)}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#475569",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: "#4f46e5",
+                      color: "#ffffff",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 8px rgba(79, 70, 229, 0.3)",
+                    }}
+                  >
+                    Create Folder
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>

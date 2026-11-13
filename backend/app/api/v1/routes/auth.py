@@ -293,4 +293,15 @@ async def logout(
 @router.get("/me")
 async def me(user: CurrentUser) -> UserResponse:
     """Return the current authenticated user."""
-    return UserResponse(id=str(user.id), email=user.email)
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        full_name=getattr(user, "full_name", None) or user.email.split("@")[0].capitalize(),
+        department=getattr(user, "department", "General") or "General",
+        role=getattr(user, "role", "Employee") or "Employee",
+        title=getattr(user, "title", None),
+        phone=getattr(user, "phone", None),
+        avatar_url=getattr(user, "avatar_url", None),
+        status=getattr(user, "status", "online") or "online",
+        status_message=getattr(user, "status_message", None),
+    )

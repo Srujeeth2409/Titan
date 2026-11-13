@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   useChatStore,
   ChatMessage,
@@ -10,7 +11,8 @@ import {
   getStoredConversations,
 } from "@/lib/chat-store";
 import { askStream, getDocuments, TitanApiError } from "@/lib/api";
-import { Citation, Confidence, HallucinationInfo } from "@/components/ask-box";
+import { Citation, Confidence, HallucinationInfo } from "@/lib/citations";
+import { PromptInputBox } from "@/components/ui/ai-prompt-box";
 import {
   exportToPdf,
   exportToDocx,
@@ -34,14 +36,18 @@ export function ChatConversation({
     deleteConvo,
   } = useChatStore();
 
+  const searchParams = useSearchParams();
+  const queryCol = searchParams.get("collection");
+
   const [inputQuery, setInputQuery] = useState("");
-  const [selectedModel, setSelectedModel] = useState("Ollama (Local 1.5B)");
+  const [selectedModel, setSelectedModel] = useState("Ollama (Local 2.2B)");
+  const [selectedEffort, setSelectedEffort] = useState("Medium");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"Fast" | "Medium" | "Deep">("Medium");
   const [isModeDropdownOpen, setIsModeDropdownOpen] = useState(false);
 
-  // Collections
-  const [collection, setCollection] = useState("default");
+  // Collections & Folders for RAG targeting
+  const [collection, setCollection] = useState(queryCol || "default");
   const [collections, setCollections] = useState<string[]>(["default"]);
   const [isCollectionPickerOpen, setIsCollectionPickerOpen] = useState(false);
 
@@ -72,12 +78,7 @@ export function ChatConversation({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const models = [
-    { id: "qwen2.5:3b", name: "Ollama (Local 3B)", tier: "Local 3B", provider: "ollama" },
-    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", tier: "Strong", provider: "anthropic" },
-    { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B (Groq)", tier: "Fast & Free", provider: "groq" },
-    { id: "qwen-2.5-32b", name: "Qwen 2.5 32B (Groq)", tier: "Fast", provider: "groq" },
-    { id: "gpt-4o", name: "GPT-4o (OpenAI)", tier: "Strong", provider: "openai" },
-    { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (OpenRouter)", tier: "Free Tier", provider: "openrouter" },
+    { id: "gemma2:2b", name: "Ollama (Local 2.2B)", tier: "Local 2.2B", provider: "ollama" },
   ];
 
   const modes = [
@@ -95,22 +96,39 @@ export function ChatConversation({
     scrollToBottom();
   }, [activeConversation?.messages, streamingAnswer, isStreaming]);
 
-  // Load available collections
+  // Load available collections and user folders for RAG targeting
   useEffect(() => {
     async function loadCollections() {
       try {
+        const colSet = new Set<string>(["default"]);
         const res = await getDocuments();
         if (res?.documents && Array.isArray(res.documents)) {
-          const uniqueCols = Array.from(new Set(res.documents.map((d: any) => d.collection || "default"))) as string[];
-          if (uniqueCols.length > 0) {
-            setCollections(uniqueCols);
-            setCollection(uniqueCols[0]);
+          res.documents.forEach((d: any) => {
+            if (d.collection) colSet.add(d.collection);
+          });
+        }
+        if (typeof window !== "undefined") {
+          try {
+            const savedFolders = localStorage.getItem("titan_user_folders");
+            if (savedFolders) {
+              const parsed = JSON.parse(savedFolders);
+              if (Array.isArray(parsed)) {
+                parsed.forEach((f: string) => colSet.add(f));
+              }
+            }
+          } catch {}
+        }
+        const colList = Array.from(colSet);
+        if (colList.length > 0) {
+          setCollections(colList);
+          if (queryCol && colSet.has(queryCol)) {
+            setCollection(queryCol);
           }
         }
       } catch {}
     }
     loadCollections();
-  }, []);
+  }, [queryCol]);
 
   // Voice Web Speech API
   const toggleVoice = () => {
@@ -321,7 +339,8 @@ export function ChatConversation({
         collection,
         apiMode,
         selectedModelObj?.provider,
-        selectedModelObj?.id
+        selectedModelObj?.id,
+        selectedEffort
       );
 
       if (!response.ok) {
@@ -673,25 +692,24 @@ export function ChatConversation({
               Ask questions across your enterprise documents. Every answer is backed by source passages with verified claim citations.
             </p>
 
-            {/* Centered Input Box */}
-            <div style={{ width: "100%", maxWidth: "660px" }}>
-              <ChatInputBar
-                query={inputQuery}
-                setQuery={setInputQuery}
-                onSend={handleSendQuery}
-                isStreaming={isStreaming}
-                models={models}
-                selectedModel={selectedModel}
-                setSelectedModel={setSelectedModel}
-                modes={modes}
-                selectedMode={selectedMode}
-                setSelectedMode={setSelectedMode}
-                collections={collections}
+            {/* Centered Input Box (AI Prompt Box with Light UI) */}
+            <div style={{ width: "100%", maxWidth: "680px" }}>
+              <PromptInputBox
+                placeholder="Ask questions across enterprise documents…"
+                model="Ollama (Local 2.2B)"
+                models={["Ollama (Local 2.2B)"]}
+                effort={selectedEffort}
+                efforts={["Low", "Medium", "Max Effort"]}
+                onEffortChange={setSelectedEffort}
                 collection={collection}
-                setCollection={setCollection}
-                isListening={isListening}
-                toggleVoice={toggleVoice}
-                textareaRef={textareaRef}
+                collections={collections}
+                onCollectionChange={setCollection}
+                value={inputQuery}
+                onValueChange={setInputQuery}
+                isLoading={isStreaming}
+                onSend={(val) => {
+                  handleSendQuery(val);
+                }}
               />
             </div>
           </section>
@@ -1257,24 +1275,22 @@ export function ChatConversation({
           }}
         >
           <div style={{ width: "100%", maxWidth: "780px", pointerEvents: "auto" }}>
-            <ChatInputBar
-              query={inputQuery}
-              setQuery={setInputQuery}
-              onSend={handleSendQuery}
-              isStreaming={isStreaming}
-              models={models}
-              selectedModel={selectedModel}
-              setSelectedModel={setSelectedModel}
-              modes={modes}
-              selectedMode={selectedMode}
-              setSelectedMode={setSelectedMode}
-              collections={collections}
+            <PromptInputBox
+              placeholder="Ask a follow-up or query across documents…"
+              model="Ollama (Local 2.2B)"
+              models={["Ollama (Local 2.2B)"]}
+              effort={selectedEffort}
+              efforts={["Low", "Medium", "Max Effort"]}
+              onEffortChange={setSelectedEffort}
               collection={collection}
-              setCollection={setCollection}
-              isListening={isListening}
-              toggleVoice={toggleVoice}
-              textareaRef={textareaRef}
-              isSticky={true}
+              collections={collections}
+              onCollectionChange={setCollection}
+              value={inputQuery}
+              onValueChange={setInputQuery}
+              isLoading={isStreaming}
+              onSend={(val) => {
+                handleSendQuery(val);
+              }}
             />
           </div>
         </div>
@@ -1382,287 +1398,5 @@ export function ChatConversation({
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Chat Input Bar Component (Reusable for Centered & Sticky Bottom)
-   ───────────────────────────────────────────────────────────────────────────── */
-
-function ChatInputBar({
-  query,
-  setQuery,
-  onSend,
-  isStreaming,
-  models,
-  selectedModel,
-  setSelectedModel,
-  modes,
-  selectedMode,
-  setSelectedMode,
-  collections,
-  collection,
-  setCollection,
-  isListening,
-  toggleVoice,
-  textareaRef,
-  isSticky = false,
-}: {
-  query: string;
-  setQuery: (v: string) => void;
-  onSend: () => void;
-  isStreaming: boolean;
-  models: { id: string; name: string; tier: string; provider: string }[];
-  selectedModel: string;
-  setSelectedModel: (m: string) => void;
-  modes: { id: string; label: string; desc: string }[];
-  selectedMode: "Fast" | "Medium" | "Deep";
-  setSelectedMode: (m: "Fast" | "Medium" | "Deep") => void;
-  collections: string[];
-  collection: string;
-  setCollection: (c: string) => void;
-  isListening: boolean;
-  toggleVoice: () => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
-  isSticky?: boolean;
-}) {
-  const [isModelOpen, setIsModelOpen] = useState(false);
-  const [isColOpen, setIsColOpen] = useState(false);
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        background: isSticky ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 255, 255, 0.88)",
-        backdropFilter: "blur(24px) saturate(1.8)",
-        WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-        borderRadius: "20px",
-        border: "1px solid rgba(0, 0, 0, 0.12)",
-        boxShadow: isSticky
-          ? "0 16px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04)"
-          : "0 10px 30px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03)",
-        padding: "14px 18px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-        transition: "box-shadow 200ms ease, border-color 200ms ease",
-      }}
-    >
-      <textarea
-        ref={textareaRef}
-        rows={isSticky ? 2 : 3}
-        placeholder="Ask a question across enterprise documents, or ask to download as PDF/Word…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onSend();
-          }
-        }}
-        style={{
-          width: "100%",
-          background: "transparent",
-          border: "none",
-          outline: "none",
-          resize: "none",
-          fontSize: "15px",
-          lineHeight: 1.5,
-          color: "#0f172a",
-          fontFamily: "inherit",
-        }}
-      />
-
-      {/* Control Bar: Model, Collection, Voice, Send */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {/* Model Selector */}
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setIsModelOpen(!isModelOpen);
-                setIsColOpen(false);
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "5px 10px",
-                borderRadius: "8px",
-                background: "#f1f5f9",
-                border: "1px solid #cbd5e1",
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "#334155",
-                cursor: "pointer",
-              }}
-            >
-              <span>{selectedModel}</span>
-              <span style={{ fontSize: "9px" }}>▾</span>
-            </button>
-
-            {isModelOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "calc(100% + 6px)",
-                  left: 0,
-                  width: "240px",
-                  background: "#ffffff",
-                  borderRadius: "12px",
-                  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.15)",
-                  border: "1px solid rgba(0, 0, 0, 0.1)",
-                  padding: "6px",
-                  zIndex: 80,
-                }}
-              >
-                {models.map((m) => (
-                  <div
-                    key={m.id}
-                    onClick={() => {
-                      setSelectedModel(m.name);
-                      setIsModelOpen(false);
-                    }}
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      background: selectedModel === m.name ? "rgba(79, 70, 229, 0.08)" : "transparent",
-                      color: selectedModel === m.name ? "#4f46e5" : "#0f172a",
-                      fontSize: "12px",
-                      fontWeight: selectedModel === m.name ? 600 : 400,
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background =
-                        selectedModel === m.name ? "rgba(79, 70, 229, 0.08)" : "transparent")
-                    }
-                  >
-                    <div>{m.name}</div>
-                    <div style={{ fontSize: "10px", color: "#64748b" }}>{m.tier}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Collection Selector */}
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setIsColOpen(!isColOpen);
-                setIsModelOpen(false);
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "5px 10px",
-                borderRadius: "8px",
-                background: "#f1f5f9",
-                border: "1px solid #cbd5e1",
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "#334155",
-                cursor: "pointer",
-              }}
-            >
-              <span>📁 {collection}</span>
-              <span style={{ fontSize: "9px" }}>▾</span>
-            </button>
-
-            {isColOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "calc(100% + 6px)",
-                  left: 0,
-                  width: "180px",
-                  background: "#ffffff",
-                  borderRadius: "12px",
-                  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.15)",
-                  border: "1px solid rgba(0, 0, 0, 0.1)",
-                  padding: "6px",
-                  zIndex: 80,
-                }}
-              >
-                {collections.map((col) => (
-                  <div
-                    key={col}
-                    onClick={() => {
-                      setCollection(col);
-                      setIsColOpen(false);
-                    }}
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      background: collection === col ? "rgba(79, 70, 229, 0.08)" : "transparent",
-                      color: collection === col ? "#4f46e5" : "#0f172a",
-                      fontSize: "12px",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background =
-                        collection === col ? "rgba(79, 70, 229, 0.08)" : "transparent")
-                    }
-                  >
-                    {col}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Voice Dictation */}
-          <button
-            type="button"
-            onClick={toggleVoice}
-            title={isListening ? "Listening..." : "Dictate query with voice"}
-            style={{
-              padding: "5px 9px",
-              borderRadius: "8px",
-              background: isListening ? "#fee2e2" : "#f1f5f9",
-              border: isListening ? "1px solid #f87171" : "1px solid #cbd5e1",
-              color: isListening ? "#dc2626" : "#475569",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              fontSize: "12px",
-            }}
-          >
-            🎤
-          </button>
-        </div>
-
-        {/* Send Button */}
-        <button
-          type="button"
-          onClick={() => onSend()}
-          disabled={!query.trim() || isStreaming}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 16px",
-            borderRadius: "10px",
-            background: !query.trim() || isStreaming ? "#cbd5e1" : "#4f46e5",
-            color: "#ffffff",
-            fontSize: "13px",
-            fontWeight: 600,
-            border: "none",
-            cursor: !query.trim() || isStreaming ? "not-allowed" : "pointer",
-            transition: "all 150ms ease",
-          }}
-        >
-          <span>{isStreaming ? "Synthesizing…" : "Ask"}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default ChatConversation;

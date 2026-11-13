@@ -14,7 +14,7 @@ import {
   getStoredConversations,
   saveStoredConversations,
 } from "@/lib/chat-store";
-import { Citation, Confidence, HallucinationInfo } from "@/components/ask-box";
+import { Citation, Confidence, HallucinationInfo } from "@/lib/citations";
 import {
   exportToPdf,
   exportToDocx,

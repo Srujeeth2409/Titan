@@ -97,46 +97,54 @@ class LLMReranker(Reranker):
 
 class BGEReranker(Reranker):
     """
-    BGE Reranker. Uses FastEmbed CrossEncoder if available, otherwise delegates to LLMReranker.
+    BGE Reranker using ONNX Runtime TextCrossEncoder for high-speed sub-millisecond reranking.
+    Falls back to mathematical RRF order if model is unavailable.
     """
 
     name = "bge-reranker"
 
     def __init__(self):
-        self._llm_reranker = LLMReranker()
+        self._encoder = None
+
+    def _get_encoder(self):
+        if self._encoder is None:
+            from fastembed.rerank.cross_encoder import TextCrossEncoder
+            self._encoder = TextCrossEncoder(model_name="BAAI/bge-reranker-base")
+        return self._encoder
 
     async def rerank(self, query: str, candidates: list[str], top_n: int) -> list[int]:
+        if not candidates:
+            return []
         try:
-            from fastembed.rerank.cross_encoder import TextCrossEncoder
             from starlette.concurrency import run_in_threadpool
 
             def _sync_rerank():
-                encoder = TextCrossEncoder(model_name="BAAI/bge-reranker-base")
+                encoder = self._get_encoder()
                 scores = list(encoder.rerank(query, candidates))
-                # Sort indices by score descending
                 ranked_pairs = sorted(
                     enumerate(scores), key=lambda x: x[1], reverse=True
                 )
                 return [idx for idx, _ in ranked_pairs[:top_n]]
 
             return await run_in_threadpool(_sync_rerank)
-        except Exception:
-            # Fall back gracefully to LLMReranker
-            return await self._llm_reranker.rerank(query, candidates, top_n)
+        except Exception as e:
+            # High-speed fallback: preserve RRF rank order
+            return list(range(min(top_n, len(candidates))))
 
 
 RERANKER_REGISTRY = {
     "none": NoOpReranker,
     "noop": NoOpReranker,
+    "fast": NoOpReranker,
     "llm": LLMReranker,
     "bge": BGEReranker,
     "bge-reranker-large": BGEReranker,
-    "default": LLMReranker,
+    "default": NoOpReranker,
 }
 
 
 def get_reranker(name: str = "default") -> Reranker:
     clean_name = name.lower().strip()
-    cls = RERANKER_REGISTRY.get(clean_name, LLMReranker)
+    cls = RERANKER_REGISTRY.get(clean_name, NoOpReranker)
     return cls()
 

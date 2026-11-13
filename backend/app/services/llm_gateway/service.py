@@ -13,6 +13,7 @@ and automatic rate-limit failover from Groq -> OpenRouter.
 """
 from dataclasses import dataclass
 import json
+import os
 from typing import AsyncIterator, Optional
 import httpx
 
@@ -58,6 +59,7 @@ class LLMGateway:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         max_tokens: int = 2048,
+        effort: Optional[str] = None,
     ) -> AsyncIterator[str]:
         """
         Stream tokens from the selected provider with automatic fallback.
@@ -102,12 +104,12 @@ class LLMGateway:
                 yield token
             return
 
-        # 3. Local Ollama / Qwen with resilient multi-tier fallback
+        # 3. Local Ollama with resilient multi-tier fallback
         if "ollama" in selected_provider or "local" in selected_provider:
-            target_model = model or settings.default_model or "qwen2.5:3b"
+            target_model = model or settings.default_model or "gemma2:2b"
             ollama_error = None
             try:
-                async for token in self._stream_ollama(system_prompt, user_prompt, target_model):
+                async for token in self._stream_ollama(system_prompt, user_prompt, target_model, effort=effort):
                     yield token
                 return
             except Exception as e:
@@ -128,7 +130,7 @@ class LLMGateway:
             if alt_model:
                 try:
                     yield f"> *[Notice: Local model '{target_model}' not found in Ollama. Automatically falling back to installed '{alt_model}']*\n\n"
-                    async for token in self._stream_ollama(system_prompt, user_prompt, alt_model):
+                    async for token in self._stream_ollama(system_prompt, user_prompt, alt_model, effort=effort):
                         yield token
                     return
                 except Exception as alt_err:
@@ -387,8 +389,23 @@ class LLMGateway:
                         continue
 
     async def _stream_ollama(
-        self, system_prompt: str, user_prompt: str, model: str
+        self, system_prompt: str, user_prompt: str, model: str, effort: Optional[str] = None
     ) -> AsyncIterator[str]:
+        eff = (effort or "medium").lower()
+        if "low" in eff:
+            temp = 0.0
+            num_predict = 384
+            num_ctx = 2048
+        elif "max" in eff or "high" in eff or "deep" in eff:
+            temp = 0.05
+            num_predict = 1200
+            num_ctx = 4096
+        else:
+            temp = 0.0
+            num_predict = 650
+            num_ctx = 2048
+
+        threads = min(os.cpu_count() or 4, 8)
         url = f"{self.ollama_base_url}/api/chat"
         payload = {
             "model": model,
@@ -397,10 +414,23 @@ class LLMGateway:
                 {"role": "user", "content": user_prompt},
             ],
             "options": {
-                "temperature": 0.2,
-                "num_ctx": 4096,
-                "num_predict": 1024,
+                "temperature": temp,
+                "num_ctx": num_ctx,
+                "num_predict": num_predict,
+                "num_thread": threads,
+                "top_k": 20,
+                "top_p": 0.85,
+                "repeat_penalty": 1.15,
+                "stop": [
+                    "<end_of_turn>",
+                    "<eos>",
+                    "<|endoftext|>",
+                    "\n\nUser:",
+                    "User:",
+                    "--- PASSAGE",
+                ],
             },
+            "keep_alive": -1,
             "stream": True,
         }
 

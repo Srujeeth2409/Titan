@@ -14,14 +14,13 @@ export interface NoiseProps {
 // Noise component integrated into the background
 export function Noise({
   patternSize = 100,
-  patternScaleX = 1, // How much to scale the noise pattern tiling horizontally
-  patternScaleY = 1, // How much to scale the noise pattern tiling vertically
+  patternScaleX = 1,
+  patternScaleY = 1,
   patternRefreshInterval = 1,
   patternAlpha = 50,
   intensity = 1,
 }: NoiseProps) {
   const grainRef = useRef<HTMLCanvasElement | null>(null);
-  // Ref to store the CSS dimensions of the canvas to avoid repeated getBoundingClientRect in loop
   const canvasCssSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -45,12 +44,12 @@ export function Noise({
       return;
     }
     const patternData = patternCtx.createImageData(patternSize, patternSize);
-    const patternPixelDataLength = patternSize * patternSize * 4; // 4 for R, G, B, A
+    const patternPixelDataLength = patternSize * patternSize * 4;
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
-      let newCssWidth = window.innerWidth; // Fallback
-      let newCssHeight = window.innerHeight; // Fallback
+      let newCssWidth = window.innerWidth;
+      let newCssHeight = window.innerHeight;
 
       if (canvas.parentElement) {
         const parentRect = canvas.parentElement.getBoundingClientRect();
@@ -63,9 +62,6 @@ export function Noise({
       canvas.width = newCssWidth * dpr;
       canvas.height = newCssHeight * dpr;
 
-      // Set the transformation matrix to account for DPR.
-      // This allows drawing commands to use CSS pixel units.
-      // Subsequent ctx.scale for pattern will be relative to this.
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
@@ -82,16 +78,11 @@ export function Noise({
 
     const drawGrain = () => {
       const { width: cssWidth, height: cssHeight } = canvasCssSizeRef.current;
-      if (cssWidth === 0 || cssHeight === 0) return; // Don't draw if canvas has no dimensions
+      if (cssWidth === 0 || cssHeight === 0) return;
 
-      // Clear using CSS pixel dimensions (context is already scaled by DPR)
       ctx.clearRect(0, 0, cssWidth, cssHeight);
-
       ctx.save();
 
-      // Scale the context for tiling the pattern.
-      // This affects how the pattern is repeated.
-      // Using Math.max to prevent division by zero if scale is 0.
       const safePatternScaleX = Math.max(0.001, patternScaleX);
       const safePatternScaleY = Math.max(0.001, patternScaleY);
       ctx.scale(safePatternScaleX, safePatternScaleY);
@@ -99,8 +90,6 @@ export function Noise({
       const fillPattern = ctx.createPattern(patternCanvas, "repeat");
       if (fillPattern) {
         ctx.fillStyle = fillPattern;
-        // Fill a rectangle that, in the *scaled* coordinate system,
-        // corresponds to the original cssWidth/cssHeight.
         ctx.fillRect(0, 0, cssWidth / safePatternScaleX, cssHeight / safePatternScaleY);
       }
 
@@ -109,7 +98,6 @@ export function Noise({
 
     let animationFrameId: number;
     const loop = () => {
-      // Only update and draw if dimensions are valid
       if (canvasCssSizeRef.current.width > 0 && canvasCssSizeRef.current.height > 0) {
         if (frame % patternRefreshInterval === 0) {
           updatePattern();
@@ -121,12 +109,10 @@ export function Noise({
     };
 
     window.addEventListener("resize", resize);
-    resize(); // Initial setup: size canvas and draw first frame if needed
+    resize();
     if (patternRefreshInterval > 0) {
-      // Start loop only if refresh is meaningful
       loop();
     } else {
-      // if refresh interval is 0 or less, draw once
       updatePattern();
       drawGrain();
     }
@@ -142,12 +128,6 @@ export function Noise({
   return <canvas className="absolute inset-0 w-full h-full pointer-events-none" ref={grainRef} />;
 }
 
-export interface GradientColorStop {
-  color: string;
-  stop: string;
-}
-
-export type GradientType = "radial-gradient" | "linear-gradient" | "conic-gradient";
 export type GradientOrigin =
   | "bottom-middle"
   | "bottom-left"
@@ -159,14 +139,16 @@ export type GradientOrigin =
   | "right-middle"
   | "center";
 
-export interface GradientBackgroundProps {
-  // Gradient customization
-  gradientType?: GradientType | string;
-  gradientSize?: string;
-  gradientOrigin?: GradientOrigin | string;
-  colors?: GradientColorStop[];
+export interface ColorStop {
+  color: string;
+  stop: string;
+}
 
-  // Noise customization
+export interface GradientBackgroundProps {
+  gradientType?: "radial-gradient" | "linear-gradient" | "conic-gradient";
+  gradientSize?: string;
+  gradientOrigin?: GradientOrigin;
+  colors?: ColorStop[];
   enableNoise?: boolean;
   noisePatternSize?: number;
   noisePatternScaleX?: number;
@@ -174,19 +156,14 @@ export interface GradientBackgroundProps {
   noisePatternRefreshInterval?: number;
   noisePatternAlpha?: number;
   noiseIntensity?: number;
-
-  // Additional styling
   className?: string;
   style?: React.CSSProperties;
   children?: React.ReactNode;
-
-  // Custom gradient string (overrides other gradient props if provided)
   customGradient?: string | null;
 }
 
 // Main gradient background component
 export function GradientBackground({
-  // Gradient customization
   gradientType = "radial-gradient",
   gradientSize = "125% 125%",
   gradientOrigin = "bottom-middle",
@@ -199,8 +176,6 @@ export function GradientBackground({
     { color: "rgba(202,179,214,1)", stop: "65%" },
     { color: "rgba(148,201,233,1)", stop: "100%" },
   ],
-
-  // Noise customization
   enableNoise = true,
   noisePatternSize = 100,
   noisePatternScaleX = 1,
@@ -208,64 +183,53 @@ export function GradientBackground({
   noisePatternRefreshInterval = 1,
   noisePatternAlpha = 50,
   noiseIntensity = 1,
-
-  // Additional styling
   className = "",
   style = {},
   children,
-
-  // Custom gradient string (overrides other gradient props if provided)
   customGradient = null,
 }: GradientBackgroundProps) {
-  // Generate gradient string from colors array
   const generateGradient = () => {
     if (customGradient) return customGradient;
 
-    const getGradientPosition = (origin: string) => {
-      const positions: Record<string, string> = {
-        "bottom-middle": "50% 101%",
-        "bottom-left": "0% 101%",
-        "bottom-right": "100% 101%",
-        "top-middle": "50% -1%",
-        "top-left": "0% -1%",
-        "top-right": "100% -1%",
-        "left-middle": "-1% 50%",
-        "right-middle": "101% 50%",
-        center: "50% 50%",
-      };
-      return positions[origin] || positions["bottom-middle"];
+    const positions: Record<GradientOrigin, string> = {
+      "bottom-middle": "50% 101%",
+      "bottom-left": "0% 101%",
+      "bottom-right": "100% 101%",
+      "top-middle": "50% -1%",
+      "top-left": "0% -1%",
+      "top-right": "100% -1%",
+      "left-middle": "-1% 50%",
+      "right-middle": "101% 50%",
+      center: "50% 50%",
     };
 
-    const position = getGradientPosition(gradientOrigin);
+    const position = positions[gradientOrigin] || positions["bottom-middle"];
     const colorStops = colors.map(({ color, stop }) => `${color} ${stop}`).join(",");
 
     if (gradientType === "radial-gradient") {
       return `radial-gradient(${gradientSize} at ${position},${colorStops})`;
     } else if (gradientType === "linear-gradient") {
-      const angleMap: Record<string, string> = {
-        "bottom-middle": "0deg", // to top
-        "bottom-left": "45deg", // to top-right
-        "bottom-right": "315deg", // to top-left
-        "top-middle": "180deg", // to bottom
-        "top-left": "135deg", // to bottom-right
-        "top-right": "225deg", // to bottom-left
-        "left-middle": "90deg", // to right
-        "right-middle": "270deg", // to left
-        center: "0deg", // Default for center, though linear usually implies direction
+      const angleMap: Record<GradientOrigin, string> = {
+        "bottom-middle": "0deg",
+        "bottom-left": "45deg",
+        "bottom-right": "315deg",
+        "top-middle": "180deg",
+        "top-left": "135deg",
+        "top-right": "225deg",
+        "left-middle": "90deg",
+        "right-middle": "270deg",
+        center: "0deg",
       };
       const angle = angleMap[gradientOrigin] || angleMap["bottom-middle"];
       return `linear-gradient(${angle},${colorStops})`;
     } else if (gradientType === "conic-gradient") {
-      // Conic gradients usually need a 'from <angle>' and 'at <position>'
-      // For simplicity, we'll use the position and a default 'from' angle.
       return `conic-gradient(from 0deg at ${position},${colorStops})`;
     }
 
-    // Fallback for unknown gradient types or simple color stop list
     return `${gradientType}(${colorStops})`;
   };
 
-  const gradientStyle = {
+  const gradientStyle: React.CSSProperties = {
     background: generateGradient(),
     ...style,
   };
@@ -288,4 +252,3 @@ export function GradientBackground({
 }
 
 export default GradientBackground;
-

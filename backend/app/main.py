@@ -5,9 +5,11 @@ Mounts the v1 API router at /v1, configures CORS for the real frontend
 origin only (no wildcard), and runs table creation on startup.
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
@@ -19,9 +21,30 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup (Alembic migrations should be used in production)
+    # Ensure local upload directories exist
+    upload_dir = Path("storage/uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create tables on startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Migrate users table columns if not present
+        user_cols = [
+            "full_name VARCHAR(255) DEFAULT 'Titan Employee'",
+            "department VARCHAR(100) DEFAULT 'General'",
+            "role VARCHAR(50) DEFAULT 'Employee'",
+            "title VARCHAR(255)",
+            "phone VARCHAR(50)",
+            "avatar_url VARCHAR(512)",
+            "status VARCHAR(50) DEFAULT 'online'",
+            "status_message VARCHAR(255)",
+        ]
+        for col_def in user_cols:
+            try:
+                await conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_def};"))
+            except Exception:
+                pass
+
     yield
     await engine.dispose()
 

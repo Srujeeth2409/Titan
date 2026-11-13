@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="chatGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#48e588"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <filter id="chatShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#047857" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- App Squircle Base -->
+  <rect x="32" y="32" width="448" height="448" rx="100" ry="100" fill="url(#chatGrad)"/>
+  <!-- Highlight Sheen -->
+  <rect x="32" y="32" width="448" height="224" rx="100" ry="100" fill="#ffffff" opacity="0.12"/>
+  <!-- Messages Speech Bubble -->
+  <g filter="url(#chatShadow)">
+    <path d="M256 120 C160 120 90 180 90 256 C90 300 115 340 156 366 C152 384 140 404 122 418 C154 418 190 400 210 384 C225 388 240 392 256 392 C352 392 422 332 422 256 C422 180 352 120 256 120 Z" fill="#ffffff"/>
+  </g>
+</svg>
+

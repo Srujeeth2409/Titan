@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRef, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useTrash } from "@/lib/trash-store";
 
@@ -16,8 +16,9 @@ export interface DockItemDef {
   onClick?: () => void;
 }
 
-export function MacOsDock({ activeId = "ask" }: { activeId?: string }) {
+export function MacOsDock({ activeId }: { activeId?: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [mouseX, setMouseX] = useState<number | null>(null);
   const [bouncingId, setBouncingId] = useState<string | null>(null);
   const [isTrashOpen, setIsTrashOpen] = useState(false);
@@ -46,72 +47,64 @@ export function MacOsDock({ activeId = "ask" }: { activeId?: string }) {
     }
   };
 
-  // Exactly the 9 apps from user's shared macOS dock image in exact order:
-  // 1. Finder (running dot)
-  // 2. Calculator
-  // 3. Terminal
-  // 4. Mail
-  // 5. Notes
-  // 6. Safari (running dot)
-  // 7. Photos
-  // 8. Music
-  // 9. Calendar (JUL 17)
+  // macOS Dock apps configured strictly for Titan Enterprise Workspace:
+  // 1. Titan AI -> RAG Workstation (/app)
+  // 2. Documents (Finder) -> Document Corpus (/app/documents)
+  // 3. Mail -> Internal Email (/app/mail)
+  // 4. Chat -> Team Messaging (/app/chat)
+  // 5. Calendar -> Company Scheduling (/app/calendar)
+  // 6. Meetings -> Video Calls (/app/meetings)
+  // 7. Notes -> Quick Notes Modal
+  // 8. Calculator -> Calculator Modal
+  // (Terminal, Music, and Photos have been removed per user requirements)
   const dockApps: DockItemDef[] = [
     {
+      id: "titan-ai",
+      name: "Titan AI",
+      iconSrc: "/dock/titan-ai.svg",
+      href: "/app",
+    },
+    {
       id: "finder",
-      name: "Finder",
+      name: "Documents",
       iconSrc: "/dock/finder.png",
-      isRunning: true,
-      href: "/app",
-    },
-    {
-      id: "calculator",
-      name: "Calculator",
-      iconSrc: "/dock/calculator.png",
-      onClick: () => {},
-    },
-    {
-      id: "terminal",
-      name: "Terminal",
-      iconSrc: "/dock/terminal.png",
-      href: "/app",
+      href: "/app/documents",
     },
     {
       id: "mail",
       name: "Mail",
       iconSrc: "/dock/mail.png",
-      href: "/app/documents",
+      href: "/app/mail",
     },
     {
-      id: "notes",
-      name: "Notes",
-      iconSrc: "/dock/notes.png",
-      href: "/app/documents",
-    },
-    {
-      id: "safari",
-      name: "Safari",
-      iconSrc: "/dock/safari.png",
-      isRunning: true,
-      onClick: () => window.open("https://apple.com", "_blank"),
-    },
-    {
-      id: "photos",
-      name: "Photos",
-      iconSrc: "/dock/photos.png",
-      onClick: () => {},
-    },
-    {
-      id: "music",
-      name: "Music",
-      iconSrc: "/dock/music.png",
-      onClick: () => {},
+      id: "chat",
+      name: "Chat",
+      iconSrc: "/dock/chat.svg",
+      href: "/app/chat",
     },
     {
       id: "calendar",
       name: "Calendar",
       iconSrc: "/dock/calendar.png",
-      onClick: () => {},
+      href: "/app/calendar",
+    },
+    {
+      id: "meetings",
+      name: "Meetings",
+      iconSrc: "/dock/meetings.svg",
+      href: "/app/meetings",
+    },
+    {
+      id: "notes",
+      name: "Notes",
+      iconSrc: "/dock/notes.png",
+      onClick: () => window.dispatchEvent(new CustomEvent("titan:open-notes")),
+    },
+    {
+      id: "calculator",
+      name: "Calculator",
+      iconSrc: "/dock/calculator.png",
+      onClick: () => window.dispatchEvent(new CustomEvent("titan:open-calculator")),
     },
   ];
 
@@ -172,20 +165,23 @@ export function MacOsDock({ activeId = "ask" }: { activeId?: string }) {
             transition: "all 200ms ease",
           }}
         >
-          {dockApps.map((app) => (
-            <DockItem
-              key={app.id}
-              app={app}
-              mouseX={mouseX}
-              isBouncing={bouncingId === app.id}
-              isActive={
-                app.id === "finder" ||
-                (app.id === "notes" && activeId === "documents") ||
-                (app.id === "terminal" && activeId === "ask")
-              }
-              onClick={() => handleItemClick(app)}
-            />
-          ))}
+          {dockApps.map((app) => {
+            const isCurrentApp =
+              app.href === "/app"
+                ? pathname === "/app"
+                : Boolean(app.href && pathname?.startsWith(app.href));
+
+            return (
+              <DockItem
+                key={app.id}
+                app={{ ...app, isRunning: isCurrentApp }}
+                mouseX={mouseX}
+                isBouncing={bouncingId === app.id}
+                isActive={isCurrentApp}
+                onClick={() => handleItemClick(app)}
+              />
+            );
+          })}
 
           {/* ── Vertical macOS Divider Line ── */}
           <div

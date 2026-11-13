@@ -350,6 +350,9 @@ const STYLES = `
   from { opacity: 0; transform: translateY(-12px) scale(0.9); }
   to { opacity: 1; transform: none; }
 }
+@keyframes pi-spin {
+  to { transform: rotate(360deg); }
+}
 `;
 
 // ----------------------------------------------------------------------
@@ -385,17 +388,34 @@ function MorphingText({ text }: { text: string }) {
 
     return (
         <span className="pi-morph" style={{ width }}>
-      <span ref={ghostRef} className="pi-morph-ghost">
-        {text}
-      </span>
-      <span key={text} className="pi-morph-live">
-        {text}
-      </span>
-    </span>
+            <span ref={ghostRef} className="pi-morph-ghost">
+                {text}
+            </span>
+            <span key={text} className="pi-morph-live">
+                {text}
+            </span>
+        </span>
     );
 }
 
 function ModelIcon({ model }: { model: string }) {
+    if (model.includes("Ollama") || model.includes("Local") || model.includes("Qwen")) {
+        return (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pi-model-icon text-indigo-500">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <rect x="9" y="9" width="6" height="6" />
+                <path d="M9 1v3" />
+                <path d="M15 1v3" />
+                <path d="M9 20v3" />
+                <path d="M15 20v3" />
+                <path d="M20 9h3" />
+                <path d="M20 14h3" />
+                <path d="M1 9h3" />
+                <path d="M1 14h3" />
+            </svg>
+        );
+    }
+
     const icons: Record<string, string> = {
         "Composer 2.5": "https://cdn.21st.dev/assets/mirror/7d/7dc00bc09f225fcda46cbc9c6b669c69c025a231877d6c17baa6a003f04f02b2.svg",
         "Gemini 3.5 Flash": "https://cdn.21st.dev/assets/mirror/cd/cda2df6631d5fa227de3fa04ed78cf354f910ba92a9f086e7455655c10ad9d09.svg",
@@ -423,6 +443,14 @@ function ArrowUpIcon() {
     return (
         <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 12V2M7 2L2.5 6.5M7 2L11.5 6.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function ChevronDownIcon({ size = 12 }: { size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
         </svg>
     );
 }
@@ -477,12 +505,12 @@ function DynamicBarsIcon({ level }: { level: string }) {
 // Attachment Thumbnail
 // ----------------------------------------------------------------------
 function AttachmentThumb({
-                             attachment,
-                             index,
-                             onRemove,
-                             onOpen,
-                             registerRef,
-                         }: {
+    attachment,
+    index,
+    onRemove,
+    onOpen,
+    registerRef,
+}: {
     attachment: Attachment;
     index: number;
     onRemove: (id: string) => void;
@@ -515,17 +543,17 @@ function AttachmentThumb({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={attachment.url} alt={attachment.name} draggable={false} />
             <span className="pi-thumb-overlay">
-        <span
-            role="button"
-            tabIndex={-1}
-            className="pi-thumb-x"
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
-            aria-label={`Remove ${attachment.name}`}
-        >
-          <CloseIcon />
-        </span>
-      </span>
+                <span
+                    role="button"
+                    tabIndex={-1}
+                    className="pi-thumb-x"
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onClick={(e) => { e.stopPropagation(); onRemove(attachment.id); }}
+                    aria-label={`Remove ${attachment.name}`}
+                >
+                    <CloseIcon />
+                </span>
+            </span>
         </button>
     );
 }
@@ -534,10 +562,10 @@ function AttachmentThumb({
 // Shared-Element Gallery Modal
 // ----------------------------------------------------------------------
 function AttachmentGalleryModal({
-                                    attachment,
-                                    originRect,
-                                    onClose,
-                                }: {
+    attachment,
+    originRect,
+    onClose,
+}: {
     attachment: Attachment;
     originRect: DOMRect;
     onClose: () => void;
@@ -641,11 +669,19 @@ export interface PromptInputProps {
     placeholder?: string;
     className?: string;
     models?: string[];
+    selectedModel?: string;
+    onModelChange?: (model: string) => void;
     efforts?: string[];
+    selectedEffort?: string;
+    onEffortChange?: (effort: string) => void;
+    collection?: string;
+    collections?: string[];
+    onCollectionChange?: (col: string) => void;
     defaultValue?: string;
     value?: string;
     onChange?: (value: string) => void;
     maxAttachments?: number;
+    isStreaming?: boolean;
 }
 
 export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
@@ -655,20 +691,37 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
             placeholder = "Ask anything",
             className,
             models = ["GPT 5.5", "Opus 4.8", "Gemini 3.5 Flash", "Composer 2.5", "GLM 5.2"],
+            selectedModel: controlledModel,
+            onModelChange,
             efforts = ["Low", "Medium", "Max Effort"],
+            selectedEffort: controlledEffort,
+            onEffortChange,
+            collection = "default",
+            collections,
+            onCollectionChange,
             defaultValue = "",
             value: controlledValue,
             onChange,
             maxAttachments = 6,
+            isStreaming = false,
         },
         ref
     ) => {
         const [expanded, setExpanded] = useState(false);
         const [isSmoothResize, setIsSmoothResize] = useState(false);
         const [localValue, setLocalValue] = useState(defaultValue);
-        const [selectedModel, setSelectedModel] = useState(models[0]);
-        const [effortIndex, setEffortIndex] = useState(1);
+        const [localModel, setLocalModel] = useState(models[0]);
+        const selectedModel = controlledModel !== undefined ? controlledModel : localModel;
+        const [localEffortIndex, setLocalEffortIndex] = useState(() => {
+            if (controlledEffort) {
+                const idx = efforts.indexOf(controlledEffort);
+                return idx >= 0 ? idx : 1;
+            }
+            return 1;
+        });
+        const effortIndex = controlledEffort ? Math.max(0, efforts.indexOf(controlledEffort)) : localEffortIndex;
         const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
+        const [isCollectionOpen, setIsCollectionOpen] = useState(false);
 
         const [attachments, setAttachments] = useState<Attachment[]>([]);
         const [activeAttachment, setActiveAttachment] = useState<{ attachment: Attachment; rect: DOMRect } | null>(null);
@@ -984,7 +1037,9 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
 
         const cycleEffort = (e: React.MouseEvent) => {
             e.stopPropagation();
-            setEffortIndex((prev) => (prev + 1) % efforts.length);
+            const nextIdx = (effortIndex + 1) % efforts.length;
+            setLocalEffortIndex(nextIdx);
+            onEffortChange?.(efforts[nextIdx]);
         };
 
         const openFileChooser = (e: React.MouseEvent) => {
@@ -1125,37 +1180,37 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                             transition: `${isSmoothResize ? SMOOTH_HEIGHT_TRANSITION : SPRING_TRANSITION}, border-color 0.2s, box-shadow 0.2s`,
                         }}
                     >
-            <textarea
-                ref={textareaRef}
-                value={value}
-                onChange={(e) => handleValueChange(e.target.value)}
-                onScroll={updateFades}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit();
-                    }
-                    if (e.key === "Escape" && value.trim() === "" && !hasAttachments) {
-                        setIsSmoothResize(false);
-                        setExpanded(false);
-                        setIsModelSelectOpen(false);
-                    }
-                }}
-                placeholder={placeholder}
-                aria-label="Prompt"
-                disabled={isRecording}
-                className={[
-                    "pi-textarea pi-scroll",
-                    expanded ? "" : "hidden",
-                    isScrolling ? "scrolling" : "",
-                    isRecording ? "recording" : "",
-                ].join(" ").trim()}
-                style={{
-                    transition: isSmoothResize
-                        ? "height 0.15s ease-out"
-                        : "opacity 0.3s ease-out, transform 0.3s ease-out, height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-                }}
-            />
+                        <textarea
+                            ref={textareaRef}
+                            value={value}
+                            onChange={(e) => handleValueChange(e.target.value)}
+                            onScroll={updateFades}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSubmit();
+                                }
+                                if (e.key === "Escape" && value.trim() === "" && !hasAttachments) {
+                                    setIsSmoothResize(false);
+                                    setExpanded(false);
+                                    setIsModelSelectOpen(false);
+                                }
+                            }}
+                            placeholder={placeholder}
+                            aria-label="Prompt"
+                            disabled={isRecording}
+                            className={[
+                                "pi-textarea pi-scroll",
+                                expanded ? "" : "hidden",
+                                isScrolling ? "scrolling" : "",
+                                isRecording ? "recording" : "",
+                            ].join(" ").trim()}
+                            style={{
+                                transition: isSmoothResize
+                                    ? "height 0.15s ease-out"
+                                    : "opacity 0.3s ease-out, transform 0.3s ease-out, height 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                            }}
+                        />
 
                         <div ref={topFadeRef} className="pi-fade pi-fade-top" />
                         <div
@@ -1186,62 +1241,123 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                             <div className="pi-menu-wrap">
                                 <button
                                     type="button"
-                                    className={`pi-pill${isModelSelectOpen ? " open" : ""}`}
+                                    className={`pi-pill${isModelSelectOpen && models.length > 1 ? " open" : ""}`}
                                     onMouseDown={(e) => e.preventDefault()}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setIsModelSelectOpen((prev) => !prev);
+                                        if (models.length > 1) {
+                                            setIsModelSelectOpen((prev) => !prev);
+                                        }
                                     }}
-                                    aria-label={`Select model. Current: ${selectedModel}`}
+                                    aria-label={`Active model: ${selectedModel}`}
                                 >
                                     <ModelIcon model={selectedModel} />
                                     <span className="pi-pill-label">
-                    <MorphingText text={selectedModel} />
-                  </span>
+                                        <MorphingText text={selectedModel} />
+                                    </span>
                                 </button>
 
-                                <div
-                                    className={`pi-menu${isModelSelectOpen ? " open" : ""}`}
-                                    onMouseLeave={() => {
-                                        setHoverStyle((prev) => ({
-                                            ...prev,
-                                            opacity: 0,
-                                            transform: String(prev.transform ?? "").replace("scale(1)", "scale(0.95)"),
-                                            transition: "opacity 0.2s ease-in, transform 0.2s ease-out",
-                                        }));
-                                    }}
-                                >
-                                    <div className="pi-menu-list">
-                                        <div className="pi-menu-hl" style={hoverStyle} />
-                                        {models.map((model, idx) => (
-                                            <button
-                                                key={model}
-                                                type="button"
-                                                className="pi-menu-item"
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onMouseEnter={() => {
-                                                    setHoverStyle((prev) => ({
-                                                        opacity: 1,
-                                                        transform: `translateY(${idx * 34}px) scale(1)`,
-                                                        transition:
-                                                            prev.opacity === 0
-                                                                ? "opacity 0.15s ease-out"
-                                                                : "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.15s ease",
-                                                    }));
-                                                }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedModel(model);
-                                                    setIsModelSelectOpen(false);
-                                                }}
-                                            >
-                                                <ModelIcon model={model} />
-                                                {model}
-                                            </button>
-                                        ))}
+                                {models.length > 1 && (
+                                    <div
+                                        className={`pi-menu${isModelSelectOpen ? " open" : ""}`}
+                                        onMouseLeave={() => {
+                                            setHoverStyle((prev) => ({
+                                                ...prev,
+                                                opacity: 0,
+                                                transform: String(prev.transform ?? "").replace("scale(1)", "scale(0.95)"),
+                                                transition: "opacity 0.2s ease-in, transform 0.2s ease-out",
+                                            }));
+                                        }}
+                                    >
+                                        <div className="pi-menu-list">
+                                            <div className="pi-menu-hl" style={hoverStyle} />
+                                            {models.map((model, idx) => (
+                                                <button
+                                                    key={model}
+                                                    type="button"
+                                                    className="pi-menu-item"
+                                                    onMouseDown={(e) => e.preventDefault()}
+                                                    onMouseEnter={() => {
+                                                        setHoverStyle((prev) => ({
+                                                            opacity: 1,
+                                                            transform: `translateY(${idx * 34}px) scale(1)`,
+                                                            transition:
+                                                                prev.opacity === 0
+                                                                    ? "opacity 0.15s ease-out"
+                                                                    : "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.15s ease",
+                                                        }));
+                                                    }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setLocalModel(model);
+                                                        onModelChange?.(model);
+                                                        setIsModelSelectOpen(false);
+                                                    }}
+                                                >
+                                                    <ModelIcon model={model} />
+                                                    {model}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
+
+                            {/* Collection Selector Pill */}
+                            {collections && collections.length > 0 && (
+                                <div style={{ position: "relative" }}>
+                                    <button
+                                        type="button"
+                                        className="pi-pill"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsCollectionOpen((prev) => !prev);
+                                            setIsModelSelectOpen(false);
+                                        }}
+                                        aria-label={`Collection: ${collection || "default"}`}
+                                    >
+                                        <span style={{ fontSize: "11px" }}>📁</span>
+                                        <span className="pi-pill-label">
+                                            <MorphingText text={collection || "default"} />
+                                        </span>
+                                        <ChevronDownIcon size={10} />
+                                    </button>
+                                    {isCollectionOpen && (
+                                        <div
+                                            className="pi-menu open"
+                                            style={{
+                                                minWidth: "160px",
+                                                bottom: "calc(100% + 8px)",
+                                                left: 0,
+                                                zIndex: 50,
+                                            }}
+                                        >
+                                            <div className="pi-menu-list">
+                                                {collections.map((col) => (
+                                                    <button
+                                                        key={col}
+                                                        type="button"
+                                                        className={`pi-menu-item${col === collection ? " active" : ""}`}
+                                                        onMouseDown={(e) => e.preventDefault()}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onCollectionChange?.(col);
+                                                            setIsCollectionOpen(false);
+                                                        }}
+                                                        style={{
+                                                            color: col === collection ? "#818cf8" : "inherit",
+                                                            fontWeight: col === collection ? 600 : 400,
+                                                        }}
+                                                    >
+                                                        📁 {col}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <button
                                 type="button"
@@ -1252,8 +1368,8 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                             >
                                 <DynamicBarsIcon level={efforts[effortIndex]} />
                                 <span className="pi-pill-label">
-                  <MorphingText text={efforts[effortIndex]} />
-                </span>
+                                    <MorphingText text={efforts[effortIndex]} />
+                                </span>
                             </button>
 
                             <button
@@ -1275,25 +1391,32 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                             ))}
                         </div>
 
-                        {/* Send / mic / stop */}
+                        {/* Send / mic / stop / streaming */}
                         <button
                             type="button"
                             className="pi-send"
+                            disabled={isStreaming}
                             onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                             onClick={onActionButtonClick}
-                            aria-label={showArrow ? "Send prompt" : showStop ? "Stop recording" : "Use voice input"}
+                            aria-label={isStreaming ? "Synthesizing answer..." : showArrow ? "Send prompt" : showStop ? "Stop recording" : "Use voice input"}
                         >
-              <span style={{ position: "relative", display: "block", width: "100%", height: "100%" }}>
-                <span className={`pi-send-icon${showArrow ? " on" : ""}`}>
-                  <ArrowUpIcon />
-                </span>
-                <span className={`pi-send-icon neg${showMic ? " on" : ""}`}>
-                  <MicIcon />
-                </span>
-                <span className={`pi-send-icon${showStop ? " on" : ""}`}>
-                  <StopIcon />
-                </span>
-              </span>
+                            {isStreaming ? (
+                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%" }}>
+                                    <span style={{ display: "inline-block", width: "13px", height: "13px", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "pi-spin 0.8s linear infinite" }} />
+                                </span>
+                            ) : (
+                                <span style={{ position: "relative", display: "block", width: "100%", height: "100%" }}>
+                                    <span className={`pi-send-icon${showArrow ? " on" : ""}`}>
+                                        <ArrowUpIcon />
+                                    </span>
+                                    <span className={`pi-send-icon neg${showMic ? " on" : ""}`}>
+                                        <MicIcon />
+                                    </span>
+                                    <span className={`pi-send-icon${showStop ? " on" : ""}`}>
+                                        <StopIcon />
+                                    </span>
+                                </span>
+                            )}
                         </button>
                     </div>
                 </div>

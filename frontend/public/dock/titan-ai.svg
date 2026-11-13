@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="titanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <filter id="titanShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#312e81" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <!-- App Squircle Base -->
+  <rect x="32" y="32" width="448" height="448" rx="100" ry="100" fill="url(#titanGrad)"/>
+  <!-- Highlight Sheen -->
+  <rect x="32" y="32" width="448" height="224" rx="100" ry="100" fill="#ffffff" opacity="0.16"/>
+  <!-- AI Sparkle / Star Mark -->
+  <g filter="url(#titanShadow)">
+    <path d="M256 110 C256 190 200 246 120 246 C200 246 256 302 256 382 C256 302 312 246 392 246 C312 246 256 190 256 110 Z" fill="#ffffff"/>
+    <circle cx="360" cy="140" r="22" fill="#ffffff" opacity="0.9"/>
+  </g>
+</svg>
+

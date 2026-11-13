@@ -46,6 +46,7 @@ class HallucinationDetector:
         self,
         answer: str,
         context_chunks: list[str],
+        fast_mode: bool = True,
     ) -> HallucinationReport:
         if not answer.strip():
             return HallucinationReport(
@@ -75,68 +76,69 @@ class HallucinationDetector:
                 total_claims=len(claims),
             )
 
-        # 1. Try LLM-as-judge verification
-        try:
-            from app.services.llm_gateway.service import get_llm_gateway
-            gateway = get_llm_gateway()
+        # 1. LLM-as-judge verification (only when fast_mode is explicitly False, e.g. Max Effort)
+        if not fast_mode:
+            try:
+                from app.services.llm_gateway.service import get_llm_gateway
+                gateway = get_llm_gateway()
 
-            context_blob = "\n\n".join(f"[Passage {i+1}]: {p[:400]}" for i, p in enumerate(context_chunks[:6]))
-            claims_blob = "\n".join(f"{i+1}. {c}" for i, c in enumerate(claims[:8]))
+                context_blob = "\n\n".join(f"[Passage {i+1}]: {p[:400]}" for i, p in enumerate(context_chunks[:6]))
+                claims_blob = "\n".join(f"{i+1}. {c}" for i, c in enumerate(claims[:8]))
 
-            system_prompt = (
-                "You are an impartial natural language inference (NLI) evaluator. "
-                "Given reference context passages and a list of claims from an answer, "
-                "determine for EACH claim whether it is SUPPORTED, CONTRADICTED, or NOT_ENOUGH_INFO. "
-                "Output ONLY a valid JSON array of objects in this exact format: "
-                '[{"claim_index": 1, "verdict": "SUPPORTED" | "CONTRADICTED" | "NOT_ENOUGH_INFO"}]. '
-                "Do not include explanation or markdown."
-            )
+                system_prompt = (
+                    "You are an impartial natural language inference (NLI) evaluator. "
+                    "Given reference context passages and a list of claims from an answer, "
+                    "determine for EACH claim whether it is SUPPORTED, CONTRADICTED, or NOT_ENOUGH_INFO. "
+                    "Output ONLY a valid JSON array of objects in this exact format: "
+                    '[{"claim_index": 1, "verdict": "SUPPORTED" | "CONTRADICTED" | "NOT_ENOUGH_INFO"}]. '
+                    "Do not include explanation or markdown."
+                )
 
-            user_prompt = f"Reference Context:\n{context_blob}\n\nClaims to evaluate:\n{claims_blob}\n\nJSON array:"
+                user_prompt = f"Reference Context:\n{context_blob}\n\nClaims to evaluate:\n{claims_blob}\n\nJSON array:"
 
-            resp = await gateway.generate(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-            )
+                resp = await gateway.generate(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                )
 
-            match = re.search(r"\[\s*\{.*\}\s*\]", resp.text.strip(), re.DOTALL)
-            if match:
-                results = json.loads(match.group(0))
-                supported = []
-                unsupported = []
-                contradictions = []
+                match = re.search(r"\[\s*\{.*\}\s*\]", resp.text.strip(), re.DOTALL)
+                if match:
+                    results = json.loads(match.group(0))
+                    supported = []
+                    unsupported = []
+                    contradictions = []
 
-                for item in results:
-                    c_idx = item.get("claim_index", 1) - 1
-                    verdict = str(item.get("verdict", "")).upper()
-                    if 0 <= c_idx < len(claims):
-                        claim_text = claims[c_idx]
-                        if "SUPPORT" in verdict:
-                            supported.append(claim_text)
-                        elif "CONTRADICT" in verdict:
-                            # Guard: if words are heavily contained in context passages, it is supported
-                            context_words = set(re.findall(r"\b[a-z0-9_]{3,}\b", " ".join(context_chunks).lower()))
-                            c_words = [w for w in re.findall(r"\b[a-z0-9_]{3,}\b", claim_text.lower())]
-                            ratio = sum(1 for w in c_words if w in context_words) / max(len(c_words), 1)
-                            if ratio >= 0.40:
+                    for item in results:
+                        c_idx = item.get("claim_index", 1) - 1
+                        verdict = str(item.get("verdict", "")).upper()
+                        if 0 <= c_idx < len(claims):
+                            claim_text = claims[c_idx]
+                            if "SUPPORT" in verdict:
                                 supported.append(claim_text)
+                            elif "CONTRADICT" in verdict:
+                                # Guard: if words are heavily contained in context passages, it is supported
+                                context_words = set(re.findall(r"\b[a-z0-9_]{3,}\b", " ".join(context_chunks).lower()))
+                                c_words = [w for w in re.findall(r"\b[a-z0-9_]{3,}\b", claim_text.lower())]
+                                ratio = sum(1 for w in c_words if w in context_words) / max(len(c_words), 1)
+                                if ratio >= 0.40:
+                                    supported.append(claim_text)
+                                else:
+                                    contradictions.append(claim_text)
                             else:
-                                contradictions.append(claim_text)
-                        else:
-                            unsupported.append(claim_text)
+                                unsupported.append(claim_text)
 
-                total = len(supported) + len(unsupported) + len(contradictions)
-                if total > 0:
-                    score = (len(unsupported) + 2.0 * len(contradictions)) / (total * 2.0)
-                    return HallucinationReport(
-                        score=round(min(1.0, max(0.0, score)), 2),
-                        unsupported_claims=unsupported,
-                        contradictions=contradictions,
-                        supported_claims=supported,
-                        total_claims=total,
-                    )
-        except Exception as e:
-            print(f"[HallucinationDetector] Fallback to lexical analysis: {e}")
+                    total = len(supported) + len(unsupported) + len(contradictions)
+                    if total > 0:
+                        score = (len(unsupported) + 2.0 * len(contradictions)) / (total * 2.0)
+                        return HallucinationReport(
+                            score=round(min(1.0, max(0.0, score)), 2),
+                            unsupported_claims=unsupported,
+                            contradictions=contradictions,
+                            supported_claims=supported,
+                            total_claims=total,
+                        )
+            except Exception as e:
+                print(f"[HallucinationDetector] Fallback to fast lexical analysis: {e}")
 
         # 2. Fast lexical / token-containment fallback
         context_words = set(re.findall(r"\b[a-z0-9_]{3,}\b", " ".join(context_chunks).lower()))

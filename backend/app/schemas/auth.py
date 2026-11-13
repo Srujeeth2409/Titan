@@ -24,6 +24,14 @@ class LoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: str
     email: str
+    full_name: str | None = "Titan Employee"
+    department: str | None = "General"
+    role: str | None = "Employee"
+    title: str | None = None
+    phone: str | None = None
+    avatar_url: str | None = None
+    status: str | None = "online"
+    status_message: str | None = None
     access_token: str | None = None
     token_type: str = "bearer"
 

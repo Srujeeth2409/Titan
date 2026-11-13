@@ -5,13 +5,8 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-
-interface NavItem {
-  id: string;
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-}
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { Search, Calculator, StickyNote } from "lucide-react";
 
 export function WorkstationNavbar() {
   const pathname = usePathname();
@@ -44,40 +39,6 @@ export function WorkstationNavbar() {
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
-
-  // ONLY relevant modules from Titan RAG documentation
-  const navItems: NavItem[] = [
-    {
-      id: "ask",
-      label: "Ask",
-      href: "/app",
-      icon: (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-      ),
-    },
-    {
-      id: "documents",
-      label: "Documents",
-      href: "/app/documents",
-      icon: (
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-          <polyline points="10 9 9 9 8 9" />
-        </svg>
-      ),
-    },
-  ];
-
-  function isActive(href: string) {
-    if (href === "/app") return pathname === "/app";
-    return pathname?.startsWith(href);
-  }
 
   return (
     <header
@@ -174,79 +135,53 @@ export function WorkstationNavbar() {
         </Link>
       </div>
 
-      {/* Center: Relevant Navigation Modules */}
-      <nav
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-          padding: "4px",
-          borderRadius: "12px",
-          background: "rgba(0, 0, 0, 0.04)",
-          border: "1px solid rgba(0, 0, 0, 0.06)",
-        }}
-      >
-        {navItems.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "8px 18px",
-                borderRadius: "9px",
-                fontSize: "14px",
-                fontWeight: active ? 600 : 500,
-                color: active ? "#4f46e5" : "#64748b",
-                background: active
-                  ? "#ffffff"
-                  : "transparent",
-                textDecoration: "none",
-                transition: "all 180ms ease",
-                whiteSpace: "nowrap",
-                boxShadow: active
-                  ? "0 2px 8px rgba(0, 0, 0, 0.06)"
-                  : "none",
-                border: active
-                  ? "1px solid rgba(0, 0, 0, 0.06)"
-                  : "1px solid transparent",
-              }}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  e.currentTarget.style.color = "#0f172a";
-                  e.currentTarget.style.background = "rgba(0, 0, 0, 0.03)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  e.currentTarget.style.color = "#64748b";
-                  e.currentTarget.style.background = "transparent";
-                }
-              }}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+      {/* Right: Quick Tools + Notifications + Clock + Profile */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Global Search Button */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("titan:open-search"))}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 text-xs font-medium border border-slate-200/60 transition-colors"
+          title="Search Company Records (Cmd+K)"
+        >
+          <Search className="w-3.5 h-3.5 text-slate-500" />
+          <span className="hidden sm:inline">Search</span>
+          <kbd className="font-mono text-[10px] text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+            ⌘K
+          </kbd>
+        </button>
 
-      {/* Right: Clock + Traditional Profile Icon Dropdown */}
-      <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+        {/* Quick Notes Button */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("titan:open-notes"))}
+          className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+          title="Quick Notes"
+        >
+          <StickyNote className="w-4 h-4" />
+        </button>
+
+        {/* Calculator Button */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("titan:open-calculator"))}
+          className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+          title="Calculator"
+        >
+          <Calculator className="w-4 h-4" />
+        </button>
+
+        {/* Notifications Dropdown */}
+        <NotificationsDropdown />
+
         {/* Monospace Clock */}
         <div
           style={{
-            fontSize: "13px",
+            fontSize: "12px",
             fontWeight: 500,
             color: "#64748b",
             fontFamily: "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace",
             letterSpacing: "0.02em",
             whiteSpace: "nowrap",
             background: "rgba(0, 0, 0, 0.03)",
-            padding: "6px 12px",
+            padding: "6px 10px",
             borderRadius: "8px",
             border: "1px solid rgba(0, 0, 0, 0.06)",
           }}

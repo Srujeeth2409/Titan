@@ -14,7 +14,7 @@ import {
   TableCell,
   WidthType,
 } from "docx";
-import { Citation, Confidence } from "@/components/ask-box";
+import { Citation, Confidence } from "@/lib/citations";
 
 export interface ExportDocumentOptions {
   title: string;

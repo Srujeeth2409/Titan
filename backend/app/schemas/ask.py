@@ -20,6 +20,7 @@ class AskRequest(BaseModel):
     mode: str = Field(default="auto", pattern="^(auto|single|agentic)$")
     provider: str | None = None
     model: str | None = None
+    effort: str | None = "Medium"
     filters: AskFilters = AskFilters()
     options: AskOptions = AskOptions()
 
