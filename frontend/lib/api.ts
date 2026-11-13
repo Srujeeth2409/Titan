@@ -439,6 +439,19 @@ export async function moveDocument(documentId: string, collection: string) {
 }
 
 export async function copyDocument(documentId: string, collection: string) {
+  if (isCloudDeployment()) {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("titan_cloud_documents");
+      const docs: DocumentItem[] = stored ? JSON.parse(stored) : [];
+      const src = docs.find((d) => d.id === documentId);
+      if (src) {
+        const copy = { ...src, id: `${Date.now()}`, collection, created_at: new Date().toISOString() };
+        docs.unshift(copy);
+        localStorage.setItem("titan_cloud_documents", JSON.stringify(docs));
+      }
+    }
+    return { success: true };
+  }
   return apiFetch(`${API_URL}/v1/documents/${documentId}/copy`, {
     method: "POST",
     body: JSON.stringify({ collection }),
@@ -454,6 +467,16 @@ export async function ask(
   provider?: string,
   model?: string
 ) {
+  if (isCloudDeployment()) {
+    // Non-streaming ask: delegate to streaming route and collect full text
+    const res = await fetch("/api/ask/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, collection, mode, provider: provider || null, model: model || null }),
+    });
+    if (!res.ok || !res.body) return { answer: "Cloud mode: use chat for responses.", chunks: [] };
+    return { answer: "Use streaming chat for cloud responses.", chunks: [] };
+  }
   return apiFetch(`${API_URL}/v1/ask`, {
     method: "POST",
     body: JSON.stringify({
@@ -1167,6 +1190,10 @@ export interface CalendarEventItem {
 }
 
 export async function apiGetCalendarEvents(start?: string, end?: string): Promise<{ events: CalendarEventItem[] }> {
+  if (isCloudDeployment()) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_calendar") : null;
+    return { events: stored ? JSON.parse(stored) : [] };
+  }
   const params = new URLSearchParams();
   if (start) params.set("start", start);
   if (end) params.set("end", end);
@@ -1184,6 +1211,25 @@ export async function apiCreateCalendarEvent(payload: {
   attendees?: string[];
   meeting_link?: string;
 }) {
+  if (isCloudDeployment()) {
+    const event: CalendarEventItem = {
+      id: `cloud-${Date.now()}`,
+      title: (payload as any).title || "Event",
+      description: (payload as any).description,
+      start_time: (payload as any).start_time,
+      end_time: (payload as any).end_time,
+      is_all_day: (payload as any).is_all_day || false,
+      location: (payload as any).location,
+      recurrence: (payload as any).recurrence || "none",
+      attendees: (payload as any).attendees || [],
+      is_owner: true,
+    };
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_calendar") : null;
+    const events: CalendarEventItem[] = stored ? JSON.parse(stored) : [];
+    events.push(event);
+    if (typeof window !== "undefined") localStorage.setItem("titan_cloud_calendar", JSON.stringify(events));
+    return event;
+  }
   return apiFetch(`${API_URL}/v1/calendar/events`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -1196,6 +1242,7 @@ export async function apiCheckCalendarConflicts(payload: {
   attendees?: string[];
   exclude_event_id?: string;
 }) {
+  if (isCloudDeployment()) return { conflicts: [] };
   return apiFetch(`${API_URL}/v1/calendar/check-conflicts`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -1203,6 +1250,13 @@ export async function apiCheckCalendarConflicts(payload: {
 }
 
 export async function apiDeleteCalendarEvent(id: string) {
+  if (isCloudDeployment()) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_calendar") : null;
+    const events: CalendarEventItem[] = stored ? JSON.parse(stored) : [];
+    const updated = events.filter((e) => e.id !== id);
+    if (typeof window !== "undefined") localStorage.setItem("titan_cloud_calendar", JSON.stringify(updated));
+    return { success: true };
+  }
   return apiFetch(`${API_URL}/v1/calendar/events/${id}`, {
     method: "DELETE",
   });
@@ -1391,6 +1445,7 @@ export async function apiGetFiles(
 ): Promise<{ current_folder: string; folders: WorkspaceFolder[]; files: WorkspaceFileItem[] }> {
   const params = new URLSearchParams({ folder_path: folderPath });
   if (q) params.set("q", q);
+  if (isCloudDeployment()) return { current_folder: folderPath, folders: [], files: [] };
   return apiFetch(`${API_URL}/v1/files?${params.toString()}`);
 }
 
@@ -1426,12 +1481,14 @@ export async function apiUploadWorkspaceFile(file: File, folderPath = "/", acces
 }
 
 export async function apiSummarizeFile(fileId: string): Promise<{ status: string; summary: string }> {
+  if (isCloudDeployment()) return { status: "cloud", summary: "File summarization requires the local backend." };
   return apiFetch(`${API_URL}/v1/files/${fileId}/summarize`, {
     method: "POST",
   });
 }
 
 export async function apiDeleteWorkspaceFile(fileId: string) {
+  if (isCloudDeployment()) return { success: true };
   return apiFetch(`${API_URL}/v1/files/${fileId}`, {
     method: "DELETE",
   });
@@ -1467,6 +1524,11 @@ export async function apiGetTasks(
   const params = new URLSearchParams({ view });
   if (statusFilter) params.set("status_filter", statusFilter);
   if (department) params.set("department", department);
+  if (isCloudDeployment()) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_tasks") : null;
+    const tasks: TaskItemData[] = stored ? JSON.parse(stored) : [];
+    return { tasks };
+  }
   return apiFetch(`${API_URL}/v1/tasks?${params.toString()}`);
 }
 
@@ -1574,6 +1636,7 @@ export async function apiGetEmployees(department = "", q = ""): Promise<{ employ
 }
 
 export async function apiGetDepartments(): Promise<{ departments: Array<{ name: string; count: number }> }> {
+  if (isCloudDeployment()) return { departments: [] };
   return apiFetch(`${API_URL}/v1/directory/departments`);
 }
 
@@ -1604,6 +1667,10 @@ export interface QuickNoteItem {
 }
 
 export async function apiGetNotes(): Promise<{ notes: QuickNoteItem[] }> {
+  if (isCloudDeployment()) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_notes") : null;
+    return { notes: stored ? JSON.parse(stored) : [] };
+  }
   return apiFetch(`${API_URL}/v1/notes`);
 }
 
@@ -1613,6 +1680,22 @@ export async function apiCreateNote(payload: {
   color?: string;
   is_pinned?: boolean;
 }) {
+  if (isCloudDeployment()) {
+    const note: QuickNoteItem = {
+      id: `cloud-${Date.now()}`,
+      title: payload.title || "Note",
+      content: payload.content || "",
+      color: payload.color || "default",
+      pinned: payload.is_pinned || false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_notes") : null;
+    const notes: QuickNoteItem[] = stored ? JSON.parse(stored) : [];
+    notes.unshift(note);
+    if (typeof window !== "undefined") localStorage.setItem("titan_cloud_notes", JSON.stringify(notes));
+    return note;
+  }
   return apiFetch(`${API_URL}/v1/notes`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -1620,6 +1703,13 @@ export async function apiCreateNote(payload: {
 }
 
 export async function apiUpdateNote(id: string, payload: Partial<QuickNoteItem>) {
+  if (isCloudDeployment()) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_notes") : null;
+    const notes: QuickNoteItem[] = stored ? JSON.parse(stored) : [];
+    const updated = notes.map((n) => n.id === id ? { ...n, ...payload, updated_at: new Date().toISOString() } : n);
+    if (typeof window !== "undefined") localStorage.setItem("titan_cloud_notes", JSON.stringify(updated));
+    return updated.find((n) => n.id === id) || payload;
+  }
   return apiFetch(`${API_URL}/v1/notes/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -1627,6 +1717,13 @@ export async function apiUpdateNote(id: string, payload: Partial<QuickNoteItem>)
 }
 
 export async function apiDeleteNote(id: string) {
+  if (isCloudDeployment()) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_notes") : null;
+    const notes: QuickNoteItem[] = stored ? JSON.parse(stored) : [];
+    const updated = notes.filter((n) => n.id !== id);
+    if (typeof window !== "undefined") localStorage.setItem("titan_cloud_notes", JSON.stringify(updated));
+    return { success: true };
+  }
   return apiFetch(`${API_URL}/v1/notes/${id}`, {
     method: "DELETE",
   });
@@ -1645,6 +1742,10 @@ export interface AnnouncementItem {
 }
 
 export async function apiGetAnnouncements(): Promise<{ announcements: AnnouncementItem[] }> {
+  if (isCloudDeployment()) {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("titan_cloud_announcements") : null;
+    return { announcements: stored ? JSON.parse(stored) : [] };
+  }
   return apiFetch(`${API_URL}/v1/announcements`);
 }
 
@@ -1673,16 +1774,19 @@ export interface NotificationItem {
 }
 
 export async function apiGetNotifications(): Promise<{ unread_count: number; notifications: NotificationItem[] }> {
+  if (isCloudDeployment()) return { unread_count: 0, notifications: [] };
   return apiFetch(`${API_URL}/v1/notifications`);
 }
 
 export async function apiMarkNotificationRead(id: string) {
+  if (isCloudDeployment()) return { success: true };
   return apiFetch(`${API_URL}/v1/notifications/${id}/read`, {
     method: "POST",
   });
 }
 
 export async function apiMarkAllNotificationsRead() {
+  if (isCloudDeployment()) return { success: true };
   return apiFetch(`${API_URL}/v1/notifications/read-all`, {
     method: "POST",
   });
@@ -1703,6 +1807,7 @@ export async function apiGlobalSearch(query: string): Promise<{
   total_hits: number;
   results: Record<string, GlobalSearchResultItem[]>;
 }> {
+  if (isCloudDeployment()) return { results: [] };
   return apiFetch(`${API_URL}/v1/search/global?q=${encodeURIComponent(query)}`);
 }
 
