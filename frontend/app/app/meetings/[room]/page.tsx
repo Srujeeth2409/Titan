@@ -34,7 +34,7 @@ import {
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
-    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302", "stun:stun3.l.google.com:19302"] },
   ],
 };
 
@@ -48,19 +48,37 @@ function RemoteVideoTile({
   stream: MediaStream;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [hasVideo, setHasVideo] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
-    const checkTracks = () => {
-      const vTrack = stream.getVideoTracks()[0];
-      setHasVideo(Boolean(vTrack && vTrack.enabled && !vTrack.muted));
+    const video = videoRef.current;
+    if (!video || !stream) return;
+
+    video.srcObject = stream;
+
+    const playVideo = () => {
+      video
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {
+          // Autoplay policy fallback: click anywhere to unmute/start playback
+          const onUserInteraction = () => {
+            video.play().then(() => setIsPlaying(true)).catch(() => {});
+            window.removeEventListener("click", onUserInteraction);
+          };
+          window.addEventListener("click", onUserInteraction);
+        });
     };
-    checkTracks();
-    stream.onaddtrack = checkTracks;
-    stream.onremovetrack = checkTracks;
+
+    playVideo();
+
+    const vTrack = stream.getVideoTracks()[0];
+    if (vTrack) {
+      vTrack.onunmute = () => {
+        setIsPlaying(true);
+        playVideo();
+      };
+    }
   }, [stream]);
 
   return (
@@ -69,10 +87,10 @@ function RemoteVideoTile({
         ref={videoRef}
         autoPlay
         playsInline
-        className={`w-full h-full object-cover ${hasVideo ? "block" : "hidden"}`}
+        className="w-full h-full object-cover"
       />
-      {!hasVideo && (
-        <div className="flex flex-col items-center gap-3">
+      {!isPlaying && (
+        <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center gap-3">
           <div className="w-16 h-16 rounded-full bg-emerald-600 flex items-center justify-center text-xl font-bold shadow-md text-white">
             {name.slice(0, 2).toUpperCase()}
           </div>
@@ -82,7 +100,7 @@ function RemoteVideoTile({
           </div>
         </div>
       )}
-      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-1.5">
+      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-lg text-xs font-medium text-white flex items-center gap-1.5 z-10">
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
         <span>{name}</span>
       </div>
@@ -125,6 +143,7 @@ export default function MeetingRoomPage() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const candidateQueue = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const [remotePeers, setRemotePeers] = useState<Map<string, { stream: MediaStream; name: string }>>(new Map());
   const supabaseChannelRef = useRef<any>(null);
 
@@ -182,20 +201,31 @@ export default function MeetingRoomPage() {
     // Add local tracks to peer connection
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current!);
+        try {
+          pc.addTrack(track, localStreamRef.current!);
+        } catch {}
       });
     }
 
     // Listen for remote tracks
     pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      if (remoteStream) {
-        setRemotePeers((prev) => {
-          const next = new Map(prev);
-          next.set(peerId, { stream: remoteStream, name: peerName });
-          return next;
-        });
+      let stream = (event.streams && event.streams[0]) || null;
+      if (!stream) {
+        stream = new MediaStream([event.track]);
       }
+      setRemotePeers((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(peerId);
+        if (existing) {
+          if (!existing.stream.getTracks().some((t) => t.id === event.track.id)) {
+            existing.stream.addTrack(event.track);
+          }
+          next.set(peerId, { stream: existing.stream, name: peerName });
+        } else {
+          next.set(peerId, { stream, name: peerName });
+        }
+        return next;
+      });
     };
 
     // Exchange ICE candidates
@@ -233,20 +263,32 @@ export default function MeetingRoomPage() {
     const { peer_id, sender_name, signal_type, data } = signal;
 
     if (signal_type === "join") {
-      // A new peer joined: create peer connection and send offer
-      const pc = getOrCreatePeerConnection(peer_id, sender_name);
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        sendSignal("offer", peer_id, offer);
-      } catch (err) {
-        console.error("[WebRTC] createOffer error:", err);
+      // Deterministic Offerer to eliminate glare/collision:
+      // The peer with the lexicographically smaller peer_id initiates the offer.
+      // The other peer waits and answers.
+      if (myPeerId.current < peer_id) {
+        const pc = getOrCreatePeerConnection(peer_id, sender_name);
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          sendSignal("offer", peer_id, offer);
+        } catch (err) {
+          console.error("[WebRTC] createOffer error:", err);
+        }
       }
     } else if (signal_type === "offer") {
       // Received offer from peer: set remote description, create and send answer
       const pc = getOrCreatePeerConnection(peer_id, sender_name);
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(data));
+
+        // Flush any queued candidates
+        const queued = candidateQueue.current.get(peer_id) || [];
+        for (const cand of queued) {
+          await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+        }
+        candidateQueue.current.delete(peer_id);
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         sendSignal("answer", peer_id, answer);
@@ -259,6 +301,13 @@ export default function MeetingRoomPage() {
       if (pc) {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(data));
+
+          // Flush any queued candidates
+          const queued = candidateQueue.current.get(peer_id) || [];
+          for (const cand of queued) {
+            await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          }
+          candidateQueue.current.delete(peer_id);
         } catch (err) {
           console.error("[WebRTC] setRemoteDescription(answer) error:", err);
         }
@@ -266,12 +315,16 @@ export default function MeetingRoomPage() {
     } else if (signal_type === "candidate") {
       // Received ICE candidate
       const pc = peerConnections.current.get(peer_id);
-      if (pc && data) {
+      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(data));
         } catch (err) {
           console.error("[WebRTC] addIceCandidate error:", err);
         }
+      } else {
+        const q = candidateQueue.current.get(peer_id) || [];
+        q.push(data);
+        candidateQueue.current.set(peer_id, q);
       }
     } else if (signal_type === "leave") {
       const pc = peerConnections.current.get(peer_id);
@@ -319,15 +372,38 @@ export default function MeetingRoomPage() {
       // 2. Initialize camera & microphone
       try {
         if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-          if (mounted) {
+          let stream: MediaStream | null = null;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+              audio: true,
+            });
+          } catch {
+            // Fallback: try audio only
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: false,
+                audio: true,
+              });
+              if (mounted) setIsVideoOn(false);
+            } catch {
+              console.warn("Camera/mic access unavailable");
+            }
+          }
+
+          if (mounted && stream) {
             localStreamRef.current = stream;
             if (localVideoRef.current) {
               localVideoRef.current.srcObject = stream;
             }
+            // Add tracks to any existing peer connections
+            peerConnections.current.forEach((pc) => {
+              stream!.getTracks().forEach((track) => {
+                try {
+                  pc.addTrack(track, stream!);
+                } catch {}
+              });
+            });
           }
         }
       } catch {
@@ -379,13 +455,9 @@ export default function MeetingRoomPage() {
           }
         } catch {}
       }, 1000);
-
-      return () => {
-        clearInterval(announceInterval);
-      };
     }
 
-    const cleanupInit = init();
+    init();
 
     return () => {
       mounted = false;
