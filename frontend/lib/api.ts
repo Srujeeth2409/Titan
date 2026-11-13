@@ -10,6 +10,20 @@ import { supabase, isSupabaseConfigured } from "./supabase";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const TOKEN_KEY = "titan_access_token";
 
+/**
+ * Returns true when running in a cloud deployment (Vercel/etc.) where
+ * the local Docker backend at localhost:8000 is unreachable.
+ */
+function isCloudDeployment(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return (
+    host.includes("vercel.app") ||
+    host.includes("netlify.app") ||
+    (!host.includes("localhost") && !host.includes("127.0.0.1") && !host.includes("192.168."))
+  );
+}
+
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);
@@ -350,6 +364,15 @@ export async function ingestDocument(file: File, collection: string = "default")
     ? { Authorization: `Bearer ${token}` }
     : {};
 
+  // On cloud deployments, use the Next.js ingest proxy route
+  if (isCloudDeployment()) {
+    const res = await fetch("/api/ingest", {
+      method: "POST",
+      body: formData,
+    });
+    return handleResponse(res);
+  }
+
   const res = await fetch(`${API_URL}/v1/ingest`, {
     method: "POST",
     credentials: "include",
@@ -410,6 +433,10 @@ export async function ask(
 /**
  * Streaming ask — returns the raw Response so the caller can read
  * the SSE stream via response.body.getReader().
+ *
+ * On cloud deployments (Vercel) where localhost:8000 is unreachable,
+ * we route through the Next.js /api/ask/stream proxy which falls back
+ * to Groq llama-3.3-70b-versatile.
  */
 export async function askStream(
   question: string,
@@ -424,6 +451,26 @@ export async function askStream(
     ? { Authorization: `Bearer ${token}` }
     : {};
 
+  const payload = JSON.stringify({
+    question,
+    collection,
+    mode,
+    provider: provider || null,
+    model: model || null,
+    effort: effort || "Medium",
+    filters: { source: null },
+    options: { top_m: 6, return_chunks: true },
+  });
+
+  // On cloud deployments, use the Next.js SSE proxy route
+  if (isCloudDeployment()) {
+    return fetch("/api/ask/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+    });
+  }
+
   return fetch(`${API_URL}/v1/ask/stream`, {
     method: "POST",
     credentials: "include",
@@ -431,16 +478,7 @@ export async function askStream(
       "Content-Type": "application/json",
       ...authHeaders,
     },
-    body: JSON.stringify({
-      question,
-      collection,
-      mode,
-      provider: provider || null,
-      model: model || null,
-      effort: effort || "Medium",
-      filters: { source: null },
-      options: { top_m: 6, return_chunks: true },
-    }),
+    body: payload,
   });
 }
 
@@ -1326,6 +1364,18 @@ export async function apiUploadWorkspaceFile(file: File, folderPath = "/", acces
 
   const token = getStoredToken();
   const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  // On cloud deployments, use the ingest proxy as a fallback
+  if (isCloudDeployment()) {
+    const cloudFormData = new FormData();
+    cloudFormData.append("file", file);
+    cloudFormData.append("collection", folderPath || "default");
+    const res = await fetch("/api/ingest", {
+      method: "POST",
+      body: cloudFormData,
+    });
+    return handleResponse(res);
+  }
 
   const res = await fetch(`${API_URL}/v1/files/upload`, {
     method: "POST",
