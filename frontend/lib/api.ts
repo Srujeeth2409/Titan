@@ -329,6 +329,9 @@ export async function apiGetMe(): Promise<AuthUser> {
 // ---- Health ----
 
 export async function getHealth() {
+  if (isCloudDeployment()) {
+    return { status: "cloud", message: "Local backend not connected" };
+  }
   const res = await fetch(`${API_URL}/v1/health`, {
     cache: "no-store",
   });
@@ -351,6 +354,15 @@ export interface DocumentItem {
 }
 
 export async function getDocuments(): Promise<{ total: number; documents: DocumentItem[] }> {
+  // On cloud, return docs from localStorage (stored during ingest)
+  if (isCloudDeployment()) {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("titan_cloud_documents");
+      const docs: DocumentItem[] = stored ? JSON.parse(stored) : [];
+      return { total: docs.length, documents: docs };
+    }
+    return { total: 0, documents: [] };
+  }
   return apiFetch(`${API_URL}/v1/documents`);
 }
 
@@ -370,7 +382,15 @@ export async function ingestDocument(file: File, collection: string = "default")
       method: "POST",
       body: formData,
     });
-    return handleResponse(res);
+    const doc = await handleResponse(res);
+    // Persist to localStorage so getDocuments() can list it
+    if (doc && doc.id && typeof window !== "undefined") {
+      const stored = localStorage.getItem("titan_cloud_documents");
+      const docs: DocumentItem[] = stored ? JSON.parse(stored) : [];
+      docs.unshift(doc);
+      localStorage.setItem("titan_cloud_documents", JSON.stringify(docs));
+    }
+    return doc;
   }
 
   const res = await fetch(`${API_URL}/v1/ingest`, {
@@ -384,6 +404,15 @@ export async function ingestDocument(file: File, collection: string = "default")
 }
 
 export async function deleteDocument(documentId: string) {
+  if (isCloudDeployment()) {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("titan_cloud_documents");
+      const docs: DocumentItem[] = stored ? JSON.parse(stored) : [];
+      const updated = docs.filter((d) => d.id !== documentId);
+      localStorage.setItem("titan_cloud_documents", JSON.stringify(updated));
+    }
+    return { success: true };
+  }
   return apiFetch(`${API_URL}/v1/documents/${documentId}`, {
     method: "DELETE",
   });
@@ -394,6 +423,15 @@ export function getDocumentDownloadUrl(documentId: string): string {
 }
 
 export async function moveDocument(documentId: string, collection: string) {
+  if (isCloudDeployment()) {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("titan_cloud_documents");
+      const docs: DocumentItem[] = stored ? JSON.parse(stored) : [];
+      const updated = docs.map((d) => d.id === documentId ? { ...d, collection } : d);
+      localStorage.setItem("titan_cloud_documents", JSON.stringify(updated));
+    }
+    return { success: true };
+  }
   return apiFetch(`${API_URL}/v1/documents/${documentId}/move`, {
     method: "PATCH",
     body: JSON.stringify({ collection }),
