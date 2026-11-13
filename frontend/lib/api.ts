@@ -79,11 +79,24 @@ async function handleResponse(res: Response): Promise<any> {
   try {
     const body = await res.json();
     if (body.detail) {
-      detail = typeof body.detail === "string"
-        ? { code: `HTTP-${res.status}`, message: body.detail, trace_id: "" }
-        : body.detail;
+      if (typeof body.detail === "string") {
+        detail = { code: `HTTP-${res.status}`, message: body.detail, trace_id: "" };
+      } else if (Array.isArray(body.detail)) {
+        const msgs = body.detail
+          .map((d: any) => d.msg || d.message || JSON.stringify(d))
+          .filter(Boolean);
+        detail = {
+          code: `HTTP-${res.status}`,
+          message: msgs.join("; ") || "Validation error",
+          trace_id: "",
+        };
+      } else {
+        detail = body.detail;
+      }
     } else if (body.error) {
-      detail = body.error;
+      detail = typeof body.error === "string"
+        ? { code: `HTTP-${res.status}`, message: body.error, trace_id: "" }
+        : body.error;
     }
   } catch {
     // Response body wasn't JSON
