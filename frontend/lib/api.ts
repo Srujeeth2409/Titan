@@ -1212,8 +1212,10 @@ export async function apiCreateCalendarEvent(payload: {
   meeting_link?: string;
 }) {
   if (isCloudDeployment()) {
+    const me = getStoredCurrentUser();
     const event: CalendarEventItem = {
       id: `cloud-${Date.now()}`,
+      user_id: me?.id || "user-local",
       title: (payload as any).title || "Event",
       description: (payload as any).description,
       start_time: (payload as any).start_time,
@@ -1686,7 +1688,7 @@ export async function apiCreateNote(payload: {
       title: payload.title || "Note",
       content: payload.content || "",
       color: payload.color || "default",
-      pinned: payload.is_pinned || false,
+      is_pinned: payload.is_pinned || false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -1807,7 +1809,7 @@ export async function apiGlobalSearch(query: string): Promise<{
   total_hits: number;
   results: Record<string, GlobalSearchResultItem[]>;
 }> {
-  if (isCloudDeployment()) return { results: [] };
+  if (isCloudDeployment()) return { query, total_hits: 0, results: {} };
   return apiFetch(`${API_URL}/v1/search/global?q=${encodeURIComponent(query)}`);
 }
 
