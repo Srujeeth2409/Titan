@@ -394,16 +394,16 @@ class LLMGateway:
         eff = (effort or "medium").lower()
         if "low" in eff:
             temp = 0.0
-            num_predict = 384
-            num_ctx = 2048
+            num_predict = 512
+            num_ctx = 4096
         elif "max" in eff or "high" in eff or "deep" in eff:
             temp = 0.05
-            num_predict = 1200
-            num_ctx = 4096
+            num_predict = 2048
+            num_ctx = 8192
         else:
             temp = 0.0
-            num_predict = 650
-            num_ctx = 2048
+            num_predict = 1200
+            num_ctx = 4096
 
         threads = min(os.cpu_count() or 4, 8)
         url = f"{self.ollama_base_url}/api/chat"

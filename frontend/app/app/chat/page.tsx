@@ -8,10 +8,14 @@ import {
   apiSendMessage,
   apiToggleReaction,
   apiGetEmployees,
+  saveStoredChatMessages,
+  getStoredChatMessages,
   ChatChannelItem,
   ChatMessageItem,
   EmployeeItem,
 } from "@/lib/api";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import {
   Hash,
   Users,
@@ -30,6 +34,7 @@ import {
 const EMOJIS = ["👍", "❤️", "🚀", "🎉", "🔥", "👀"];
 
 export default function ChatPage() {
+  const { user } = useAuth();
   const [channels, setChannels] = useState<ChatChannelItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
@@ -48,6 +53,83 @@ export default function ChatPage() {
   const [creatingChannel, setCreatingChannel] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Realtime Supabase Channel Subscription for Live Chat
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const chatChannel = supabase.channel("titan_workspace_chat");
+
+    chatChannel
+      .on("broadcast", { event: "new-message" }, ({ payload }) => {
+        if (!payload || !payload.id) return;
+        const incoming: ChatMessageItem = payload;
+        const myId = user?.id;
+        const isMe = Boolean(myId && incoming.user_id === myId);
+
+        // Save to local cache for persistence
+        const existing = getStoredChatMessages(incoming.channel_id);
+        if (!existing.some((m) => m.id === incoming.id)) {
+          saveStoredChatMessages(incoming.channel_id, [...existing, { ...incoming, is_me: isMe }]);
+        }
+
+        // If currently viewing this channel, append message live
+        if (incoming.channel_id === activeChannelId) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === incoming.id)) return prev;
+            return [...prev, { ...incoming, is_me: isMe }];
+          });
+        }
+
+        // Update channel last_message preview
+        setChannels((prev) =>
+          prev.map((c) =>
+            c.id === incoming.channel_id
+              ? {
+                  ...c,
+                  last_message: {
+                    text: incoming.message_text,
+                    sender_name: incoming.sender_name,
+                    created_at: incoming.created_at,
+                  },
+                }
+              : c
+          )
+        );
+      })
+      .on("broadcast", { event: "new-channel" }, ({ payload }) => {
+        if (!payload || !payload.id) return;
+        setChannels((prev) => {
+          if (prev.some((c) => c.id === payload.id)) return prev;
+          return [...prev, payload];
+        });
+      })
+      .on("broadcast", { event: "new-reaction" }, ({ payload }) => {
+        if (!payload || !payload.messageId) return;
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== payload.messageId) return m;
+            const currentUsers = m.reactions[payload.emoji] || [];
+            const hasReacted = currentUsers.includes(payload.userId);
+            const nextUsers = hasReacted
+              ? currentUsers.filter((u) => u !== payload.userId)
+              : [...currentUsers, payload.userId];
+            const nextReactions = { ...m.reactions };
+            if (nextUsers.length > 0) {
+              nextReactions[payload.emoji] = nextUsers;
+            } else {
+              delete nextReactions[payload.emoji];
+            }
+            return { ...m, reactions: nextReactions };
+          })
+        );
+      })
+      .subscribe();
+
+    return () => {
+      chatChannel.unsubscribe();
+    };
+  }, [activeChannelId, user?.id]);
 
   useEffect(() => {
     loadInitialData();

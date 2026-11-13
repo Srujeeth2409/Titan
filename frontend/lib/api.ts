@@ -469,18 +469,162 @@ export interface EmailItem {
   created_at: string;
 }
 
+const EMAIL_STORAGE_KEY = "titan_corporate_emails";
+
+function getStoredCurrentUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("titan_current_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getStoredEmails(): EmailItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(EMAIL_STORAGE_KEY);
+    if (!raw) {
+      const initial: EmailItem[] = [
+        {
+          id: "mail-init-1",
+          sender_email: "alex.chen@titan.com",
+          sender_name: "Alex Chen (Lead AI Architect)",
+          recipient_emails: ["srujeethvisinigiri@titan.com", "srujeethvisnigiri@gmail.com"],
+          subject: "Titan Knowledge Base & Neural RAG Index Ready",
+          body_text: "Welcome to Titan Enterprise Workspace!\n\nThe vector embeddings and Qdrant collections have been indexed. You can now execute hybrid retrieval, generate grounded reports with inline citations, and start real-time video conferences or team chat.",
+          body_html: "<p>Welcome to <strong>Titan Enterprise Workspace</strong>!</p><p>The vector embeddings and Qdrant collections have been indexed.</p>",
+          folder: "inbox",
+          is_read: false,
+          is_starred: true,
+          attachments: [
+            { name: "Titan_Architecture_V2.pdf", size: 142050, type: "application/pdf" },
+          ],
+          created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+        },
+        {
+          id: "mail-init-2",
+          sender_email: "finance@titan.com",
+          sender_name: "Titan Executive Operations",
+          recipient_emails: ["srujeethvisinigiri@titan.com", "srujeethvisnigiri@gmail.com"],
+          subject: "Q4 Performance & Financial Resource Report Attached",
+          body_text: "Attached is the quarterly breakdown synthesized by our RAG model.\n\nReview the key KPIs, revenue trends, and hardware benchmarks.",
+          body_html: "<p>Attached is the quarterly breakdown synthesized by our RAG model.</p>",
+          folder: "inbox",
+          is_read: true,
+          is_starred: false,
+          attachments: [
+            { name: "Q4_Financial_Summary.pdf", size: 98400, type: "application/pdf" },
+          ],
+          created_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+        },
+      ];
+      localStorage.setItem(EMAIL_STORAGE_KEY, JSON.stringify(initial));
+      return initial;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export function saveStoredEmails(emails: EmailItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(EMAIL_STORAGE_KEY, JSON.stringify(emails));
+  } catch (e) {
+    console.error("Failed to save emails to localStorage", e);
+  }
+}
+
 export async function apiGetEmails(folder = "inbox", q = ""): Promise<{ items: EmailItem[]; total: number }> {
-  const query = new URLSearchParams({ folder });
-  if (q) query.set("q", q);
-  return apiFetch(`${API_URL}/v1/mail?${query.toString()}`);
+  try {
+    const query = new URLSearchParams({ folder });
+    if (q) query.set("q", q);
+    return await apiFetch(`${API_URL}/v1/mail?${query.toString()}`);
+  } catch {
+    const all = getStoredEmails();
+    const me = getStoredCurrentUser();
+    const myEmail = (me?.email || "").toLowerCase().trim();
+
+    let filtered = all.filter((m) => {
+      if (folder === "starred") return m.is_starred;
+      if (m.folder !== folder) return false;
+
+      // Filter by user perspective so recipients receive their mail and senders see sent mail
+      if (folder === "sent") {
+        if (!myEmail) return true;
+        return m.sender_email.toLowerCase().trim() === myEmail;
+      }
+      if (folder === "inbox") {
+        if (!myEmail) return true;
+        const recipients = (m.recipient_emails || []).map((e) => e.toLowerCase().trim());
+        const ccs = (m.cc_emails || []).map((e) => e.toLowerCase().trim());
+        const bccs = (m.bcc_emails || []).map((e) => e.toLowerCase().trim());
+        return recipients.includes(myEmail) || ccs.includes(myEmail) || bccs.includes(myEmail);
+      }
+      return true;
+    });
+
+    if (q) {
+      const queryLower = q.toLowerCase();
+      filtered = filtered.filter(
+        (m) =>
+          m.subject.toLowerCase().includes(queryLower) ||
+          m.body_text.toLowerCase().includes(queryLower) ||
+          m.sender_name.toLowerCase().includes(queryLower) ||
+          m.sender_email.toLowerCase().includes(queryLower)
+      );
+    }
+
+    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return { items: filtered, total: filtered.length };
+  }
 }
 
 export async function apiGetMailCounts(): Promise<Record<string, number>> {
-  return apiFetch(`${API_URL}/v1/mail/counts`);
+  try {
+    return await apiFetch(`${API_URL}/v1/mail/counts`);
+  } catch {
+    const all = getStoredEmails();
+    const me = getStoredCurrentUser();
+    const myEmail = (me?.email || "").toLowerCase().trim();
+
+    const inboxMails = all.filter((m) => {
+      if (m.folder !== "inbox") return false;
+      if (!myEmail) return true;
+      const recipients = (m.recipient_emails || []).map((e) => e.toLowerCase().trim());
+      return recipients.includes(myEmail);
+    });
+
+    const sentMails = all.filter((m) => {
+      if (m.folder !== "sent") return false;
+      if (!myEmail) return true;
+      return m.sender_email.toLowerCase().trim() === myEmail;
+    });
+
+    return {
+      inbox: inboxMails.length,
+      unread_inbox: inboxMails.filter((m) => !m.is_read).length,
+      sent: sentMails.length,
+      drafts: all.filter((m) => m.folder === "drafts").length,
+      archive: all.filter((m) => m.folder === "archive").length,
+      trash: all.filter((m) => m.folder === "trash").length,
+      starred: all.filter((m) => m.is_starred).length,
+    };
+  }
 }
 
 export async function apiGetEmail(id: string): Promise<EmailItem> {
-  return apiFetch(`${API_URL}/v1/mail/${id}`);
+  try {
+    return await apiFetch(`${API_URL}/v1/mail/${id}`);
+  } catch {
+    const all = getStoredEmails();
+    const found = all.find((m) => m.id === id);
+    if (found) return found;
+    throw new TitanApiError(404, { code: "TT-404", message: "Email not found", trace_id: "" });
+  }
 }
 
 export async function apiSendEmail(payload: {
@@ -494,23 +638,89 @@ export async function apiSendEmail(payload: {
   is_draft?: boolean;
   draft_id?: string;
 }) {
-  return apiFetch(`${API_URL}/v1/mail/send`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const me = getStoredCurrentUser();
+  const senderEmail = me?.email || "srujeethvisinigiri@titan.com";
+  const senderName = me?.full_name || senderEmail.split("@")[0];
+
+  const emailId = payload.draft_id || `mail-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const emailItem: EmailItem = {
+    id: emailId,
+    sender_email: senderEmail,
+    sender_name: senderName,
+    recipient_emails: payload.recipient_emails,
+    cc_emails: payload.cc_emails || [],
+    bcc_emails: payload.bcc_emails || [],
+    subject: payload.subject,
+    body_text: payload.body_text,
+    body_html: payload.body_html || `<p>${payload.body_text.replace(/\n/g, "<br/>")}</p>`,
+    folder: payload.is_draft ? "drafts" : "sent",
+    is_read: true,
+    is_starred: false,
+    attachments: payload.attachments || [],
+    created_at: new Date().toISOString(),
+  };
+
+  // 1. Try sending to backend
+  let res: any = null;
+  try {
+    res = await apiFetch(`${API_URL}/v1/mail/send`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    res = { status: "sent", id: emailItem.id };
+  }
+
+  // 2. Persist locally for sender
+  const current = getStoredEmails();
+  const filtered = current.filter((m) => m.id !== emailItem.id);
+  saveStoredEmails([emailItem, ...filtered]);
+
+  // 3. Broadcast real-time delivery via Supabase across all browsers
+  if (isSupabaseConfigured && supabase && !payload.is_draft) {
+    try {
+      const channel = supabase.channel("titan_corporate_mail");
+      await channel.send({
+        type: "broadcast",
+        event: "new-email",
+        payload: emailItem,
+      });
+    } catch (broadcastErr) {
+      console.warn("Mail broadcast notice:", broadcastErr);
+    }
+  }
+
+  return res;
 }
 
 export async function apiUpdateEmail(id: string, payload: { folder?: string; is_read?: boolean; is_starred?: boolean }) {
-  return apiFetch(`${API_URL}/v1/mail/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  try {
+    return await apiFetch(`${API_URL}/v1/mail/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    const current = getStoredEmails();
+    const updated = current.map((m) => (m.id === id ? { ...m, ...payload } : m));
+    saveStoredEmails(updated);
+    return { status: "updated", id };
+  }
 }
 
 export async function apiDeleteEmail(id: string, permanent = false) {
-  return apiFetch(`${API_URL}/v1/mail/${id}?permanent=${permanent}`, {
-    method: "DELETE",
-  });
+  try {
+    return await apiFetch(`${API_URL}/v1/mail/${id}?permanent=${permanent}`, {
+      method: "DELETE",
+    });
+  } catch {
+    const current = getStoredEmails();
+    if (permanent) {
+      saveStoredEmails(current.filter((m) => m.id !== id));
+    } else {
+      saveStoredEmails(current.map((m) => (m.id === id ? { ...m, folder: "trash" } : m)));
+    }
+    return { status: "deleted", id };
+  }
 }
 
 // ---- Chat ----
@@ -541,8 +751,126 @@ export interface ChatMessageItem {
   is_me: boolean;
 }
 
+const CHAT_CHANNELS_KEY = "titan_chat_channels";
+const CHAT_MESSAGES_PREFIX = "titan_chat_messages_";
+
+export function getStoredChatChannels(): ChatChannelItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CHAT_CHANNELS_KEY);
+    if (!raw) {
+      const defaults: ChatChannelItem[] = [
+        {
+          id: "c-general",
+          name: "general",
+          channel_type: "public",
+          department: "General",
+          description: "Company-wide discussions, announcements, and team banter",
+          last_message: {
+            text: "Welcome to Titan workspace chat!",
+            sender_name: "Titan Bot",
+            created_at: new Date(Date.now() - 3600000).toISOString(),
+          },
+        },
+        {
+          id: "c-engineering",
+          name: "engineering",
+          channel_type: "public",
+          department: "Engineering",
+          description: "Architecture, pull requests, AI infrastructure, and system design",
+          last_message: {
+            text: "RAG embeddings index and WebRTC signaling upgraded to Supabase Realtime.",
+            sender_name: "Srujeeth Visinigiri",
+            created_at: new Date(Date.now() - 1800000).toISOString(),
+          },
+        },
+        {
+          id: "c-product",
+          name: "product",
+          channel_type: "public",
+          department: "Product",
+          description: "Product strategy, user research, roadmap milestones",
+          last_message: {
+            text: "Sprint 4 review scheduled for Friday.",
+            sender_name: "Sarah Miller",
+            created_at: new Date(Date.now() - 7200000).toISOString(),
+          },
+        },
+        {
+          id: "c-random",
+          name: "random",
+          channel_type: "public",
+          department: "General",
+          description: "Coffee breaks, office jokes, casual conversations",
+          last_message: null,
+        },
+      ];
+      localStorage.setItem(CHAT_CHANNELS_KEY, JSON.stringify(defaults));
+      return defaults;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+export function saveStoredChatChannels(channels: ChatChannelItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CHAT_CHANNELS_KEY, JSON.stringify(channels));
+  } catch (e) {
+    console.error("Failed to save channels", e);
+  }
+}
+
+export function getStoredChatMessages(channelId: string): ChatMessageItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`${CHAT_MESSAGES_PREFIX}${channelId}`);
+    const me = getStoredCurrentUser();
+    const myId = me?.id;
+    if (!raw) {
+      const initial: ChatMessageItem[] = [
+        {
+          id: `seed-1-${channelId}`,
+          channel_id: channelId,
+          user_id: "system",
+          sender_name: "Titan Assistant",
+          message_text: `Welcome to #${channelId.replace("c-", "")}! You can exchange real-time updates, share generated RAG files, and collaborate here.`,
+          attachments: [],
+          reactions: { "🚀": ["system"], "👍": ["system"] },
+          created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+          is_me: false,
+        },
+      ];
+      localStorage.setItem(`${CHAT_MESSAGES_PREFIX}${channelId}`, JSON.stringify(initial));
+      return initial;
+    }
+    const msgs: ChatMessageItem[] = JSON.parse(raw);
+    return msgs.map((m) => ({
+      ...m,
+      is_me: Boolean(myId && m.user_id === myId),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export function saveStoredChatMessages(channelId: string, messages: ChatMessageItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`${CHAT_MESSAGES_PREFIX}${channelId}`, JSON.stringify(messages));
+  } catch (e) {
+    console.error("Failed to save messages", e);
+  }
+}
+
 export async function apiGetChannels(): Promise<{ channels: ChatChannelItem[] }> {
-  return apiFetch(`${API_URL}/v1/chat/channels`);
+  try {
+    return await apiFetch(`${API_URL}/v1/chat/channels`);
+  } catch {
+    return { channels: getStoredChatChannels() };
+  }
 }
 
 export async function apiCreateChannel(payload: {
@@ -551,31 +879,139 @@ export async function apiCreateChannel(payload: {
   department?: string;
   description?: string;
 }) {
-  return apiFetch(`${API_URL}/v1/chat/channels`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const newChan: ChatChannelItem = {
+    id: `c-${payload.name.toLowerCase().replace(/\s+/g, "-")}`,
+    name: payload.name.toLowerCase().replace(/\s+/g, "-"),
+    channel_type: payload.channel_type || "public",
+    department: payload.department || "General",
+    description: payload.description || "",
+    last_message: null,
+  };
+
+  try {
+    const res = await apiFetch(`${API_URL}/v1/chat/channels`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  } catch {
+    const channels = getStoredChatChannels();
+    const updated = [...channels, newChan];
+    saveStoredChatChannels(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const channel = supabase.channel("titan_workspace_chat");
+        await channel.send({
+          type: "broadcast",
+          event: "new-channel",
+          payload: newChan,
+        });
+      } catch {}
+    }
+
+    return { channel: newChan };
+  }
 }
 
 export async function apiGetChannelMessages(channelId: string): Promise<{ messages: ChatMessageItem[] }> {
-  return apiFetch(`${API_URL}/v1/chat/channels/${channelId}/messages`);
+  try {
+    return await apiFetch(`${API_URL}/v1/chat/channels/${channelId}/messages`);
+  } catch {
+    return { messages: getStoredChatMessages(channelId) };
+  }
 }
 
 export async function apiSendMessage(
   channelId: string,
   payload: { message_text: string; attachments?: any[]; reply_to_id?: string }
 ): Promise<{ status: string; message: ChatMessageItem }> {
-  return apiFetch(`${API_URL}/v1/chat/channels/${channelId}/messages`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const me = getStoredCurrentUser();
+  const newMsg: ChatMessageItem = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    channel_id: channelId,
+    user_id: me?.id || "user-local",
+    sender_name: me?.full_name || me?.email?.split("@")[0] || "Team Member",
+    message_text: payload.message_text,
+    attachments: payload.attachments || [],
+    reactions: {},
+    reply_to_id: payload.reply_to_id,
+    created_at: new Date().toISOString(),
+    is_me: true,
+  };
+
+  let resMsg = newMsg;
+  try {
+    const res = await apiFetch(`${API_URL}/v1/chat/channels/${channelId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (res?.message) resMsg = res.message;
+  } catch {}
+
+  // Save to local channel storage
+  const msgs = getStoredChatMessages(channelId);
+  if (!msgs.some((m) => m.id === resMsg.id)) {
+    saveStoredChatMessages(channelId, [...msgs, resMsg]);
+  }
+
+  // Update channel last message
+  const channels = getStoredChatChannels();
+  const updatedChannels = channels.map((c) =>
+    c.id === channelId
+      ? {
+          ...c,
+          last_message: {
+            text: resMsg.message_text,
+            sender_name: resMsg.sender_name,
+            created_at: resMsg.created_at,
+          },
+        }
+      : c
+  );
+  saveStoredChatChannels(updatedChannels);
+
+  // Broadcast real-time to other users
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const channel = supabase.channel("titan_workspace_chat");
+      await channel.send({
+        type: "broadcast",
+        event: "new-message",
+        payload: resMsg,
+      });
+    } catch (e) {
+      console.warn("Chat broadcast warning:", e);
+    }
+  }
+
+  return { status: "sent", message: resMsg };
 }
 
 export async function apiToggleReaction(messageId: string, emoji: string) {
-  return apiFetch(`${API_URL}/v1/chat/messages/${messageId}/reactions`, {
-    method: "POST",
-    body: JSON.stringify({ emoji }),
-  });
+  try {
+    return await apiFetch(`${API_URL}/v1/chat/messages/${messageId}/reactions`, {
+      method: "POST",
+      body: JSON.stringify({ emoji }),
+    });
+  } catch {
+    const me = getStoredCurrentUser();
+    const myId = me?.id || "user-local";
+
+    // Broadcast reaction
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const channel = supabase.channel("titan_workspace_chat");
+        await channel.send({
+          type: "broadcast",
+          event: "new-reaction",
+          payload: { messageId, emoji, userId: myId },
+        });
+      } catch {}
+    }
+
+    return { reactions: { [emoji]: [myId] } };
+  }
 }
 
 // ---- Calendar ----

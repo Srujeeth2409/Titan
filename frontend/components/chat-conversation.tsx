@@ -19,6 +19,338 @@ import {
   detectExportIntent,
 } from "@/lib/document-exporter";
 
+/* ── Inline Formatted Renderer (Citations, Bold, Code, Tables, Visual Bars) ── */
+function renderFormattedInline(
+  text: string,
+  citations?: Citation[],
+  onCitationClick?: (c: Citation) => void
+) {
+  const parts = text.split(/(\[\d+\]|\*\*[^*]+\*\*|`[^`]+`)/g);
+
+  return parts.map((part, idx) => {
+    if (!part) return null;
+
+    // Inline citations [1], [2]
+    const citeMatch = part.match(/^\[(\d+)\]$/);
+    if (citeMatch) {
+      const citeNum = parseInt(citeMatch[1], 10);
+      const foundCite = citations?.find((c, i) => (c.index || i + 1) === citeNum);
+      return (
+        <span
+          key={idx}
+          onClick={() => foundCite && onCitationClick && onCitationClick(foundCite)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "1px 5px",
+            margin: "0 2px",
+            fontSize: "11px",
+            fontWeight: 700,
+            borderRadius: "4px",
+            background: "#e0e7ff",
+            color: "#4338ca",
+            cursor: foundCite ? "pointer" : "default",
+            verticalAlign: "baseline",
+            userSelect: "none",
+          }}
+          title={foundCite ? `View citation: ${foundCite.source}` : `Passage [${citeNum}]`}
+        >
+          [{citeNum}]
+        </span>
+      );
+    }
+
+    // Bold **text**
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={idx} style={{ fontWeight: 700, color: "#0f172a" }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    // Inline code `code`
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={idx}
+          style={{
+            fontFamily: "monospace",
+            fontSize: "12px",
+            background: "#f1f5f9",
+            color: "#0f172a",
+            padding: "2px 5px",
+            borderRadius: "4px",
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    // Visual ASCII Bar highlight [████████░░]
+    if (part.includes("█") || part.includes("░")) {
+      return (
+        <span
+          key={idx}
+          style={{
+            fontFamily: "monospace",
+            fontWeight: 600,
+            color: "#059669",
+            letterSpacing: "1px",
+          }}
+        >
+          {part}
+        </span>
+      );
+    }
+
+    return <span key={idx}>{part}</span>;
+  });
+}
+
+function ReportContentRenderer({
+  content,
+  citations,
+  onCitationClick,
+}: {
+  content: string;
+  citations?: Citation[];
+  onCitationClick?: (c: Citation) => void;
+}) {
+  const lines = content.split("\n");
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Check if table start
+    if (
+      line.trim().startsWith("|") &&
+      line.trim().endsWith("|") &&
+      i + 1 < lines.length &&
+      lines[i + 1].includes("---")
+    ) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+
+      if (tableLines.length >= 2) {
+        const headerCells = tableLines[0]
+          .split("|")
+          .slice(1, -1)
+          .map((c) => c.trim());
+        const dataRows = tableLines.slice(2).map((rowStr) =>
+          rowStr
+            .split("|")
+            .slice(1, -1)
+            .map((c) => c.trim())
+        );
+
+        elements.push(
+          <div key={`table-${i}`} style={{ overflowX: "auto", margin: "14px 0" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "12.5px",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                overflow: "hidden",
+                background: "#ffffff",
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
+                  {headerCells.map((h, hIdx) => (
+                    <th
+                      key={hIdx}
+                      style={{
+                        padding: "8px 12px",
+                        textAlign: "left",
+                        fontWeight: 700,
+                        color: "#1e293b",
+                        fontSize: "12px",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.03em",
+                      }}
+                    >
+                      {renderFormattedInline(h, citations, onCitationClick)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dataRows.map((row, rIdx) => (
+                  <tr
+                    key={rIdx}
+                    style={{
+                      background: rIdx % 2 === 0 ? "#ffffff" : "#f8fafc",
+                      borderBottom: "1px solid #f1f5f9",
+                    }}
+                  >
+                    {row.map((cell, cIdx) => (
+                      <td
+                        key={cIdx}
+                        style={{
+                          padding: "8px 12px",
+                          color: "#334155",
+                          fontSize: "12.5px",
+                        }}
+                      >
+                        {renderFormattedInline(cell, citations, onCitationClick)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+    }
+
+    // Code blocks ```
+    if (line.trim().startsWith("```")) {
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing ```
+      elements.push(
+        <pre
+          key={`code-${i}`}
+          style={{
+            background: "#0f172a",
+            color: "#f8fafc",
+            padding: "12px 16px",
+            borderRadius: "8px",
+            fontSize: "12px",
+            fontFamily: "monospace",
+            overflowX: "auto",
+            margin: "12px 0",
+          }}
+        >
+          {codeLines.join("\n")}
+        </pre>
+      );
+      continue;
+    }
+
+    // Headings
+    if (line.startsWith("# ")) {
+      elements.push(
+        <h1
+          key={`h1-${i}`}
+          style={{
+            fontSize: "18px",
+            fontWeight: 800,
+            color: "#0f172a",
+            margin: "16px 0 8px 0",
+            paddingBottom: "4px",
+            borderBottom: "1px solid #e2e8f0",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {renderFormattedInline(line.slice(2), citations, onCitationClick)}
+        </h1>
+      );
+      i++;
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      elements.push(
+        <h2
+          key={`h2-${i}`}
+          style={{
+            fontSize: "15px",
+            fontWeight: 700,
+            color: "#1e293b",
+            margin: "12px 0 6px 0",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {renderFormattedInline(line.slice(3), citations, onCitationClick)}
+        </h2>
+      );
+      i++;
+      continue;
+    }
+
+    if (line.startsWith("### ")) {
+      elements.push(
+        <h3
+          key={`h3-${i}`}
+          style={{
+            fontSize: "13.5px",
+            fontWeight: 600,
+            color: "#334155",
+            margin: "10px 0 4px 0",
+          }}
+        >
+          {renderFormattedInline(line.slice(4), citations, onCitationClick)}
+        </h3>
+      );
+      i++;
+      continue;
+    }
+
+    // Bullet points
+    if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
+      elements.push(
+        <div
+          key={`bullet-${i}`}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "8px",
+            margin: "3px 0",
+            color: "#1e293b",
+            fontSize: "13.5px",
+            lineHeight: 1.6,
+          }}
+        >
+          <span style={{ color: "#4f46e5", fontWeight: 700 }}>•</span>
+          <div style={{ flex: 1 }}>
+            {renderFormattedInline(line.trim().slice(2), citations, onCitationClick)}
+          </div>
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Standard paragraph or empty line
+    if (!line.trim()) {
+      elements.push(<div key={`empty-${i}`} style={{ height: "6px" }} />);
+    } else {
+      elements.push(
+        <p
+          key={`p-${i}`}
+          style={{
+            margin: "4px 0",
+            fontSize: "13.5px",
+            lineHeight: 1.65,
+            color: "#1e293b",
+          }}
+        >
+          {renderFormattedInline(line, citations, onCitationClick)}
+        </p>
+      );
+    }
+    i++;
+  }
+
+  return <div style={{ width: "100%" }}>{elements}</div>;
+}
+
 export function ChatConversation({
   isSidebarOpen,
   onToggleSidebar,
@@ -200,6 +532,30 @@ export function ChatConversation({
       console.error(`Export to ${format} failed:`, e);
     } finally {
       setTimeout(() => setDownloadingDocId(null), 1000);
+    }
+  };
+
+  // Send message / report as an attachment directly to Mail composer
+  const handleSendViaMail = (msg: ChatMessage) => {
+    const docTitle = activeConversation?.title || "Titan_Knowledge_Synthesis";
+    const cleanTitle = docTitle.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const summary =
+      msg.content.length > 500
+        ? msg.content.slice(0, 500) + "\n\n[...Full analysis continued in attached report]"
+        : msg.content;
+    const pendingDraft = {
+      subject: `[Report] ${docTitle}`,
+      body: `Hi Team,\n\nPlease find the synthesized report generated by Titan Enterprise RAG attached below:\n\n${summary}\n\nBest regards,\nTitan Enterprise Intelligence`,
+      attachment: {
+        name: `${cleanTitle}.pdf`,
+        size: Math.max(1024, msg.content.length * 12),
+        type: "application/pdf",
+        content: msg.content,
+      },
+    };
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("titan_pending_mail_draft", JSON.stringify(pendingDraft));
+      window.location.href = "/app/mail?compose=true";
     }
   };
 
@@ -878,17 +1234,12 @@ export function ChatConversation({
                         </div>
                       )}
 
-                      {/* Markdown Answer Body */}
-                      <div
-                        style={{
-                          fontSize: "14.5px",
-                          lineHeight: 1.7,
-                          color: "#0f172a",
-                          whiteSpace: "pre-line",
-                        }}
-                      >
-                        {msg.content}
-                      </div>
+                      {/* Rich Markdown & Report Body */}
+                      <ReportContentRenderer
+                        content={msg.content}
+                        citations={msg.citations}
+                        onCitationClick={(c) => setSelectedCitation(c)}
+                      />
 
                       {/* Interactive Export Document Card (when generated via prompt) */}
                       {msg.exportAttachment && (
@@ -933,7 +1284,7 @@ export function ChatConversation({
                             </div>
                           </div>
 
-                          <div style={{ display: "flex", gap: "8px" }}>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                             {(msg.exportAttachment.format === "pdf" || msg.exportAttachment.format === "both") && (
                               <button
                                 type="button"
@@ -991,6 +1342,42 @@ export function ChatConversation({
                                 📥 Download Word (.docx)
                               </button>
                             )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const draft = {
+                                  subject: `[Titan Document] ${msg.exportAttachment!.title}`,
+                                  body: `Hello,\n\nPlease find attached the document "${msg.exportAttachment!.title}" synthesized from Titan Knowledge Base.\n\nBest regards,\nTitan Enterprise Workspace`,
+                                  attachment: {
+                                    name: `${msg.exportAttachment!.title}.${msg.exportAttachment!.format === "docx" ? "docx" : "pdf"}`,
+                                    size: 16500,
+                                    type:
+                                      msg.exportAttachment!.format === "docx"
+                                        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        : "application/pdf",
+                                    content: msg.exportAttachment!.targetContent || msg.content,
+                                  },
+                                };
+                                if (typeof window !== "undefined") {
+                                  sessionStorage.setItem("titan_pending_mail_draft", JSON.stringify(draft));
+                                  window.location.href = "/app/mail?compose=true";
+                                }
+                              }}
+                              style={{
+                                padding: "6px 14px",
+                                borderRadius: "8px",
+                                background: "#059669",
+                                color: "#ffffff",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                border: "none",
+                                cursor: "pointer",
+                                boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
+                              }}
+                            >
+                              ✉️ Send via Mail
+                            </button>
                           </div>
                         </div>
                       )}
@@ -1150,6 +1537,38 @@ export function ChatConversation({
                             <span>{downloadingDocId === `docx-${msg.id}` ? "Exporting…" : "Word"}</span>
                           </button>
 
+                          {/* Send via Mail Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleSendViaMail(msg)}
+                            title="Attach this report directly to an email"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              background: "transparent",
+                              border: "1px solid rgba(5, 150, 105, 0.3)",
+                              padding: "3px 8px",
+                              borderRadius: "6px",
+                              color: "#059669",
+                              fontSize: "11.5px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              transition: "all 140ms ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#ecfdf5";
+                              e.currentTarget.style.borderColor = "#059669";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.borderColor = "rgba(5, 150, 105, 0.3)";
+                            }}
+                          >
+                            <span>✉️</span>
+                            <span>Mail</span>
+                          </button>
+
                           {/* Copy Answer */}
                           <button
                             type="button"
@@ -1233,9 +1652,13 @@ export function ChatConversation({
                     ))}
                   </div>
 
-                  {/* Streaming text with pulsing cursor */}
-                  <div style={{ fontSize: "14.5px", lineHeight: 1.7, color: "#0f172a", whiteSpace: "pre-line" }}>
-                    {streamingAnswer}
+                  {/* Streaming text with rich report renderer & pulsing cursor */}
+                  <div style={{ fontSize: "14.5px", lineHeight: 1.7, color: "#0f172a" }}>
+                    <ReportContentRenderer
+                      content={streamingAnswer}
+                      citations={streamingCitations}
+                      onCitationClick={(c) => setSelectedCitation(c)}
+                    />
                     <span
                       style={{
                         display: "inline-block",
