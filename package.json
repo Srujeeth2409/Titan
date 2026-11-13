@@ -1,9 +1,0 @@
-{
-  "name": "titan-workspace",
-  "private": true,
-  "scripts": {
-    "dev": "npm run dev --prefix frontend",
-    "build": "npm run build --prefix frontend",
-    "start": "npm run start --prefix frontend"
-  }
-}
