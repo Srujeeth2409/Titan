@@ -177,22 +177,25 @@ export async function apiLogin(email: string, password: string): Promise<AuthUse
         }
       }
 
-      // 2. Direct corporate login credentials for Titan workstation:
-      if (
-        (cleanEmail === "srujeethvisinigiri@titan.com" ||
-          cleanEmail === "srujeethvisnigiri@gmail.com" ||
-          cleanEmail.includes("srujeeth")) &&
-        (password === "Mannat" || password === "adminpassword")
-      ) {
+      // 2. Allow login for any user on Vercel
+      if (password && password.length >= 3) {
+        const isAdmin = cleanEmail.includes("srujeeth") || cleanEmail.includes("admin");
+        const displayName = cleanEmail
+          .split("@")[0]
+          .replace(/[\._]/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+
         const authUser: AuthUser = {
-          id: cleanEmail === "srujeethvisnigiri@gmail.com"
+          id: cleanEmail === "srujeethvisinigiri@titan.com"
+            ? "8d8d87af-91c3-4cb8-8de5-b83048f338bb"
+            : cleanEmail === "srujeethvisnigiri@gmail.com"
             ? "d7ee6172-e69a-49eb-8ce1-b6cbf895d218"
-            : "8d8d87af-91c3-4cb8-8de5-b83048f338bb",
+            : "usr_" + Math.random().toString(36).substring(2, 10),
           email: cleanEmail,
-          full_name: "Srujeeth Visinigiri",
-          department: "Engineering",
-          role: "Admin",
-          title: "Staff Lead",
+          full_name: displayName || "Titan Team Member",
+          department: isAdmin ? "Engineering" : "General",
+          role: isAdmin ? "Admin" : "Employee",
+          title: isAdmin ? "Staff Lead" : "Team Member",
           phone: "+1 (555) 019-2834",
           status: "online",
           access_token: "titan_jwt_token_" + Date.now(),
