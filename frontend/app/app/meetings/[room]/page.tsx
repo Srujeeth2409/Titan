@@ -11,6 +11,7 @@ import {
   MeetingItem,
 } from "@/lib/api";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import {
   Video,
   VideoOff,
@@ -93,6 +94,7 @@ export default function MeetingRoomPage() {
   const params = useParams();
   const roomCode = params.room as string;
   const router = useRouter();
+  const { user } = useAuth();
 
   const [meeting, setMeeting] = useState<MeetingItem | null>(null);
   const [isVideoOn, setIsVideoOn] = useState(true);
@@ -117,11 +119,23 @@ export default function MeetingRoomPage() {
 
   // Peer & Stream Management
   const myPeerId = useRef<string>(Math.random().toString(36).slice(2, 10));
-  const myName = useRef<string>("User " + myPeerId.current.slice(0, 4));
+  const myName = useRef<string>(
+    user?.full_name || (user?.email ? user.email.split("@")[0].toUpperCase() : "User " + myPeerId.current.slice(0, 4))
+  );
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const [remotePeers, setRemotePeers] = useState<Map<string, { stream: MediaStream; name: string }>>(new Map());
+  const supabaseChannelRef = useRef<any>(null);
+
+  // Sync myName if user loads later
+  useEffect(() => {
+    if (user?.full_name) {
+      myName.current = user.full_name;
+    } else if (user?.email) {
+      myName.current = user.email.split("@")[0].toUpperCase();
+    }
+  }, [user]);
 
   // Unified Signaling Sender (Supabase Realtime + Titan API Fallback)
   const sendSignal = useCallback(async (
@@ -137,21 +151,20 @@ export default function MeetingRoomPage() {
       data: data || {},
     };
 
-    // 1. Send via Supabase Broadcast if configured
-    if (isSupabaseConfigured && supabase) {
+    // 1. Send via active, subscribed Supabase channel
+    if (supabaseChannelRef.current) {
       try {
-        const channel = supabase.channel(`meeting:${roomCode}`);
-        await channel.send({
+        await supabaseChannelRef.current.send({
           type: "broadcast",
           event: "webrtc-signal",
           payload,
         });
       } catch (err) {
-        console.warn("[Supabase] broadcast failed, using API:", err);
+        console.warn("[Supabase Broadcast] error:", err);
       }
     }
 
-    // 2. Always sync via Titan Signaling API
+    // 2. Also send via Titan Signaling API fallback
     try {
       await apiSendMeetingSignal(roomCode, payload);
     } catch {}
@@ -323,9 +336,10 @@ export default function MeetingRoomPage() {
 
       // 3. Connect Supabase Realtime Channel if configured
       if (isSupabaseConfigured && supabase) {
-        const channel = supabase.channel(`meeting:${roomCode}`, {
+        const channel = supabase.channel(`meeting_${roomCode}`, {
           config: { broadcast: { self: false } },
         });
+        supabaseChannelRef.current = channel;
 
         channel
           .on("broadcast", { event: "webrtc-signal" }, ({ payload }) => {
@@ -340,8 +354,16 @@ export default function MeetingRoomPage() {
           });
       }
 
-      // 4. Announce join via HTTP signal bus & poll for peers
+      // 4. Announce join via signal bus & poll for peers
       await sendSignal("join");
+
+      // 5. Periodic announce every 3.5s until connected so new peers pair immediately
+      const announceInterval = setInterval(() => {
+        if (!mounted) return;
+        if (peerConnections.current.size === 0) {
+          sendSignal("join");
+        }
+      }, 3500);
 
       pollInterval = setInterval(async () => {
         if (!mounted) return;
@@ -357,14 +379,26 @@ export default function MeetingRoomPage() {
           }
         } catch {}
       }, 1000);
+
+      return () => {
+        clearInterval(announceInterval);
+      };
     }
 
-    init();
+    const cleanupInit = init();
 
     return () => {
       mounted = false;
       if (pollInterval) clearInterval(pollInterval);
       sendSignal("leave");
+
+      // Clean up Supabase channel
+      if (supabaseChannelRef.current && supabase) {
+        try {
+          supabase.removeChannel(supabaseChannelRef.current);
+          supabaseChannelRef.current = null;
+        } catch {}
+      }
 
       // Close all peer connections
       peerConnections.current.forEach((pc) => pc.close());
