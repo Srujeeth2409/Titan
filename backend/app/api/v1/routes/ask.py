@@ -6,6 +6,14 @@ Connects to:
 - Qdrant for semantic vector search across document collections
 - LLM Gateway (Anthropic Claude 3.5 Sonnet / OpenAI GPT-4o / Ollama / Qwen) for generation
 - Real citation grounding and confidence computation
+
+RAG Improvements (v2):
+- top_m raised: Low=6, Medium=12, Max=16 → bigger reranker pool
+- Multi-query retrieval: 3 rephrasings fused for broader recall
+- HyDE (Hypothetical Document Embeddings): embed a generated answer, not the raw query
+- Contextual chunk prefixing: [Document / Section] prepended at retrieval time
+- RRF weights balanced: dense=0.5, sparse=0.5 for enterprise docs
+- CoT citation prompting added to SYSTEM_PROMPT
 """
 import json
 import re
@@ -39,6 +47,12 @@ Security Guardrails & Grounding Rules:
 4. When referencing facts from a passage, include an inline citation formatted as [1], [2], etc., matching the passage index.
 5. If the provided context does not contain enough information to answer the question faithfully, state clearly what is missing rather than inventing facts.
 6. Never fabricate passage citations (e.g. citing [9] when only 3 passages exist).
+
+Citation-First Reasoning (Chain-of-Thought Grounding):
+Before writing each factual sentence or claim, explicitly identify which passage(s) support it.
+Format: State the fact, then immediately append the citation [N].
+Example: "The system uses a hybrid retrieval pipeline combining dense and sparse search [1], achieving an F1 score of 0.82 on domain queries [2]."
+If no passage supports a claim, omit the claim entirely rather than writing it uncited.
 
 Report Generation & Data/Graph Synthesis Capabilities:
 7. Executive Report Generation:
@@ -80,6 +94,58 @@ def _build_context_prompt(question: str, chunks: List[RetrievedChunk]) -> str:
         f"User Question: {question}\n\n"
         f"Please provide a grounded answer with inline citations [1], [2], etc.:"
     )
+
+
+async def _generate_query_variants(question: str, llm) -> List[str]:
+    """
+    Multi-Query Retrieval: Generate 2 rephrasings of the question so retrieval
+    casts a wider net. Falls back gracefully to just the original question on error.
+    """
+    try:
+        rephrase_prompt = (
+            f"Rephrase the following question in 2 different ways that preserve its meaning "
+            f"but use different vocabulary. Output only the rephrased questions, one per line, "
+            f"with no numbering, bullets, or extra text.\n\nQuestion: {question}"
+        )
+        result = await llm.generate(
+            system_prompt="You are a question reformulation assistant. Output only the rephrased questions.",
+            user_prompt=rephrase_prompt,
+            provider=None,
+            model=None,
+        )
+        lines = [ln.strip() for ln in result.text.strip().splitlines() if ln.strip()]
+        variants = [question] + lines[:2]
+        return variants
+    except Exception:
+        return [question]
+
+
+async def _hyde_embed(question: str, llm, embedder) -> Optional[List[float]]:
+    """
+    HyDE (Hypothetical Document Embeddings): Generate a hypothetical answer paragraph
+    and embed THAT instead of (or alongside) the raw query. The embedding of a plausible
+    answer is much closer to actual document embeddings than the raw question embedding.
+    Falls back to None on any error; caller should then use the standard query vector.
+    """
+    try:
+        hyde_prompt = (
+            f"Write a concise, factual paragraph (3-5 sentences) that would directly answer "
+            f"the following question. Write as if you found this in an enterprise document.\n\n"
+            f"Question: {question}"
+        )
+        result = await llm.generate(
+            system_prompt="You are a document synthesis assistant. Write dense, factual paragraphs.",
+            user_prompt=hyde_prompt,
+            provider=None,
+            model=None,
+        )
+        hypo_text = result.text.strip()
+        if hypo_text:
+            vecs = await embedder.embed([hypo_text])
+            return vecs[0]
+    except Exception:
+        pass
+    return None
 
 
 def _calculate_confidence(chunks: List[RetrievedChunk], citations: List[dict], hallucination_score: float = 0.0):
@@ -129,16 +195,49 @@ async def ask(
         query_vectors = await embedder.embed([sanitized_question])
         query_vector = query_vectors[0]
 
-        # 2. Hybrid Search (Qdrant Dense + BM25 Sparse + RRF + Reranker)
+        # 1b. HyDE: attempt a hypothetical-document embedding to improve retrieval alignment
+        llm = get_llm_gateway()
+        hyde_vector = await _hyde_embed(sanitized_question, llm, embedder)
+        if hyde_vector:
+            # Average raw query vector with HyDE vector for best of both worlds
+            query_vector = [
+                (a + b) / 2.0 for a, b in zip(query_vector, hyde_vector)
+            ]
+
+        # 2. Multi-Query Hybrid Search (Qdrant Dense + BM25 Sparse + RRF + Reranker)
         retriever = get_retrieval_service()
-        top_m = (body.options.top_m if body.options and body.options.top_m else 6)
-        chunks = await retriever.hybrid_search(
-            collection_name=body.collection,
-            query=sanitized_question,
-            query_vector=query_vector,
-            top_k=top_m,
-            rerank=True,
-        )
+        top_m = (body.options.top_m if body.options and body.options.top_m else 12)
+
+        # Generate query variants and retrieve for each; union the results
+        query_variants = await _generate_query_variants(sanitized_question, llm)
+        seen_ids: set = set()
+        all_chunks: List[RetrievedChunk] = []
+        for variant in query_variants:
+            v_vecs = await embedder.embed([variant])
+            variant_chunks = await retriever.hybrid_search(
+                collection_name=body.collection,
+                query=variant,
+                query_vector=v_vecs[0],
+                top_k=top_m,
+                rerank=False,  # rerank once on the merged pool below
+            )
+            for c in variant_chunks:
+                if c.chunk_id not in seen_ids:
+                    seen_ids.add(c.chunk_id)
+                    all_chunks.append(c)
+
+        # Rerank the merged candidate pool and trim to top_m
+        if all_chunks:
+            try:
+                from app.services.reranking.service import get_reranker
+                reranker = get_reranker()
+                passages = [c.text for c in all_chunks]
+                ranked_indices = await reranker.rerank(sanitized_question, passages, top_n=top_m)
+                chunks = [all_chunks[i] for i in ranked_indices if i < len(all_chunks)]
+            except Exception:
+                chunks = all_chunks[:top_m]
+        else:
+            chunks = []
 
         # 3. Check for abstention
         if not chunks or (len(chunks) > 0 and chunks[0].score < 0.25):
@@ -263,14 +362,14 @@ async def ask_stream(
             # Effort tuning: adjustments to retrieval depth and generation instructions
             effort_mode = (body.effort or "Medium").lower()
             if "low" in effort_mode:
-                top_m = min(body.options.top_m if body.options and body.options.top_m else 4, 4)
+                top_m = min(body.options.top_m if body.options and body.options.top_m else 6, 6)
                 effort_instruction = (
                     "\n\nEFFORT LEVEL: LOW.\n"
                     "Provide a rapid, direct, and concise summary answering the question in 2-3 focused paragraphs. "
                     "Use precise inline citations [1], [2] referencing the source passages."
                 )
             elif "max" in effort_mode or "high" in effort_mode or "deep" in effort_mode:
-                top_m = max(body.options.top_m if body.options and body.options.top_m else 8, 8)
+                top_m = max(body.options.top_m if body.options and body.options.top_m else 16, 16)
                 effort_instruction = (
                     "\n\nEFFORT LEVEL: MAX EFFORT (Deep Reasoning).\n"
                     "Thoroughly analyze all reference passages. Cross-examine facts, compare details across sections, "
@@ -278,24 +377,56 @@ async def ask_stream(
                     "inline citations [1], [2] mapped to the passages."
                 )
             else:
-                top_m = body.options.top_m if body.options and body.options.top_m else 6
+                top_m = body.options.top_m if body.options and body.options.top_m else 12
                 effort_instruction = (
                     "\n\nEFFORT LEVEL: MEDIUM.\n"
-                    "Provide a comprehensive, well-structured explanation with clear logical flow and verified inline citations [1], [2]."
+                    "Provide a comprehensive, well-structured explanation with clear logical flow and verified inline citations [1], [2].\n"
+                    "Before each factual sentence, internally verify which passage supports it, then cite it inline."
                 )
 
-            # Event 3: step_started (Hybrid search)
-            search_step_msg = f"Hybrid retrieval on '{body.collection}' (Dense Vector + BM25 Sparse + RRF) [Effort: {body.effort or 'Medium'}]"
+            # Event 3: step_started (Hybrid search with HyDE + Multi-Query)
+            search_step_msg = f"Multi-Query + HyDE retrieval on '{body.collection}' (Dense + BM25 + RRF + Rerank) [Effort: {body.effort or 'Medium'}]"
             yield f"data: {json.dumps({'type': 'step_started', 'data': {'step': search_step_msg}})}\n\n"
+
+            # HyDE: embed a hypothetical answer for better vector alignment
+            llm_for_hyde = get_llm_gateway()
+            hyde_vector = await _hyde_embed(sanitized_question, llm_for_hyde, embedder)
+            if hyde_vector:
+                query_vector = [(a + b) / 2.0 for a, b in zip(query_vector, hyde_vector)]
+
             retriever = get_retrieval_service()
-            chunks = await retriever.hybrid_search(
-                collection_name=body.collection,
-                query=sanitized_question,
-                query_vector=query_vector,
-                top_k=top_m,
-                rerank=True,
-            )
-            yield f"data: {json.dumps({'type': 'step_completed', 'data': {'step': f'Fused & reranked {len(chunks)} relevant chunks'}})}\n\n"
+            # Multi-Query: generate variants, retrieve for each, union results
+            query_variants = await _generate_query_variants(sanitized_question, llm_for_hyde)
+            seen_ids: set = set()
+            all_chunks: List[RetrievedChunk] = []
+            for variant in query_variants:
+                v_vecs = await embedder.embed([variant])
+                variant_chunks = await retriever.hybrid_search(
+                    collection_name=body.collection,
+                    query=variant,
+                    query_vector=v_vecs[0],
+                    top_k=top_m,
+                    rerank=False,
+                )
+                for c in variant_chunks:
+                    if c.chunk_id not in seen_ids:
+                        seen_ids.add(c.chunk_id)
+                        all_chunks.append(c)
+
+            # Rerank the merged candidate pool
+            if all_chunks:
+                try:
+                    from app.services.reranking.service import get_reranker
+                    reranker = get_reranker()
+                    passages = [c.text for c in all_chunks]
+                    ranked_indices = await reranker.rerank(sanitized_question, passages, top_n=top_m)
+                    chunks = [all_chunks[i] for i in ranked_indices if i < len(all_chunks)]
+                except Exception:
+                    chunks = all_chunks[:top_m]
+            else:
+                chunks = []
+
+            yield f"data: {json.dumps({'type': 'step_completed', 'data': {'step': f'Fused & reranked {len(chunks)} relevant chunks from {len(query_variants)} query variants'}})}\n\n"
 
             # Event 4: chunks_retrieved
             chunks_summary = [

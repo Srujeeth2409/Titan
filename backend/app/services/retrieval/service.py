@@ -142,8 +142,8 @@ class QdrantVectorService:
         query: str,
         query_vector: List[float],
         top_k: int = 6,
-        dense_weight: float = 0.6,
-        sparse_weight: float = 0.4,
+        dense_weight: float = 0.5,
+        sparse_weight: float = 0.5,
         rrf_k: int = 60,
         rerank: bool = True,
     ) -> List[RetrievedChunk]:
