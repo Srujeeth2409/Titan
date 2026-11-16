@@ -1,75 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Background Gradient (Apple macOS Deep Indigo / Azure) -->
-    <linearGradient id="bgGrad" x1="50%" y1="0%" x2="50%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5"/>
-      <stop offset="35%" stop-color="#4338ca"/>
-      <stop offset="70%" stop-color="#3730a3"/>
-      <stop offset="100%" stop-color="#1e1b4b"/>
+    <linearGradient id="titanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
     </linearGradient>
-
-    <!-- Glass Specular Highlight -->
-    <linearGradient id="sheenGrad" x1="50%" y1="0%" x2="50%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
-      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.08"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
-
-    <!-- Inner Core Prism Gradient -->
-    <linearGradient id="coreGrad" x1="20%" y1="10%" x2="80%" y2="90%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="30%" stop-color="#e0e7ff"/>
-      <stop offset="70%" stop-color="#a5b4fc"/>
-      <stop offset="100%" stop-color="#818cf8"/>
-    </linearGradient>
-
-    <!-- Right Prism Facet -->
-    <linearGradient id="facetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#c7d2fe"/>
-      <stop offset="100%" stop-color="#6366f1"/>
-    </linearGradient>
-
-    <!-- Glow Filter -->
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="16" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-
-    <!-- Deep 3D Drop Shadow -->
-    <filter id="macAppShadow" x="-15%" y="-15%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#0f172a" flood-opacity="0.55"/>
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#1e1b4b" flood-opacity="0.4"/>
+    <filter id="titanShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#312e81" flood-opacity="0.4"/>
     </filter>
   </defs>
-
-  <!-- Base Apple Squircle with Soft macOS Drop Shadow -->
-  <g filter="url(#macAppShadow)">
-    <rect x="36" y="36" width="440" height="440" rx="98" ry="98" fill="url(#bgGrad)"/>
-    
-    <!-- Outer Hairline Specular Border -->
-    <rect x="36.5" y="36.5" width="439" height="439" rx="97.5" ry="97.5" fill="none" stroke="#ffffff" stroke-opacity="0.28" stroke-width="1.5"/>
-    
-    <!-- Top-half Glass Sheen -->
-    <rect x="36" y="36" width="440" height="230" rx="98" ry="98" fill="url(#sheenGrad)"/>
+  <!-- App Squircle Base -->
+  <rect x="32" y="32" width="448" height="448" rx="100" ry="100" fill="url(#titanGrad)"/>
+  <!-- Highlight Sheen -->
+  <rect x="32" y="32" width="448" height="224" rx="100" ry="100" fill="#ffffff" opacity="0.16"/>
+  <!-- AI Sparkle / Star Mark -->
+  <g filter="url(#titanShadow)">
+    <path d="M256 110 C256 190 200 246 120 246 C200 246 256 302 256 382 C256 302 312 246 392 246 C312 246 256 190 256 110 Z" fill="#ffffff"/>
+    <circle cx="360" cy="140" r="22" fill="#ffffff" opacity="0.9"/>
   </g>
-
-  <!-- Ambient Radial Glow behind the Titan Core -->
-  <circle cx="256" cy="256" r="140" fill="#6366f1" opacity="0.35" filter="url(#softGlow)"/>
-
-  <!-- 3D Geometric Titan Intelligence Monolith -->
-  <!-- Top Center Diamond / Octahedron Facet -->
-  <polygon points="256,104 366,220 256,260 146,220" fill="url(#coreGrad)"/>
-  
-  <!-- Bottom Left Facet -->
-  <polygon points="146,220 256,260 256,408 146,310" fill="#4f46e5" opacity="0.85"/>
-  
-  <!-- Bottom Right Facet (Light Catcher) -->
-  <polygon points="256,260 366,220 366,310 256,408" fill="url(#facetGrad)"/>
-
-  <!-- Center Core Star Sparkle -->
-  <path d="M256,190 Q256,256 190,256 Q256,256 256,322 Q256,256 322,256 Q256,256 256,190 Z" fill="#ffffff" opacity="0.95" filter="url(#softGlow)"/>
-
-  <!-- Sparkle Accent Dot -->
-  <circle cx="340" cy="148" r="12" fill="#ffffff" opacity="0.9"/>
-  <circle cx="172" cy="340" r="8" fill="#ffffff" opacity="0.75"/>
 </svg>
+

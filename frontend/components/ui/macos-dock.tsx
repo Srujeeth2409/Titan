@@ -47,13 +47,13 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
     }
   };
 
-  // Authentic macOS Dock Apps:
-  // 1. Titan AI -> Core Intelligence / RAG Workstation (/app)
-  // 2. Documents (Finder) -> Enterprise Document Corpus (/app/documents)
-  // 3. Mail -> Corporate Realtime Mail (/app/mail)
-  // 4. Notes -> Quick Notes Drawer
-  // 5. Calculator -> Calculator Tool
-  // [Chat, Calendar, and Meetings removed per user specification]
+  // macOS Dock apps configured strictly for Titan Enterprise Workspace:
+  // 1. Titan AI -> RAG Workstation (/app)
+  // 2. Documents (Finder) -> Document Corpus (/app/documents)
+  // 3. Mail -> Internal Email (/app/mail)
+  // 4. Notes -> Quick Notes Modal
+  // 5. Calculator -> Calculator Modal
+  // (Chat, Calendar, and Meetings have been removed per user requirements)
   const dockApps: DockItemDef[] = [
     {
       id: "titan-ai",
@@ -102,46 +102,46 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
           __html: `
         @keyframes macBounce {
           0%, 100% { transform: translateY(0); }
-          22% { transform: translateY(-28px); }
+          20% { transform: translateY(-24px); }
           40% { transform: translateY(0); }
-          60% { transform: translateY(-14px); }
-          78% { transform: translateY(0); }
+          60% { transform: translateY(-12px); }
+          80% { transform: translateY(0); }
           90% { transform: translateY(-4px); }
         }
         .mac-bouncing {
-          animation: macBounce 0.72s cubic-bezier(0.25, 1, 0.5, 1);
+          animation: macBounce 0.7s cubic-bezier(0.28, 0.84, 0.42, 1);
         }
         @keyframes modalPop {
-          0% { opacity: 0; transform: scale(0.96) translateY(12px); }
+          0% { opacity: 0; transform: scale(0.95) translateY(10px); }
           100% { opacity: 1; transform: scale(1) translateY(0); }
         }
       `,
         }}
       />
 
-      {/* ── macOS Floating Dock Container ── */}
+      {/* ── macOS Floating Dock (Matching user's shared image exactly) ── */}
       <div
         className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-end justify-center select-none"
         onMouseMove={(e) => setMouseX(e.clientX)}
         onMouseLeave={() => setMouseX(null)}
         data-grid-avoid
       >
-        {/* Dock Shelf: Authentic Apple Frosted Glass with Specular Light Rim */}
+        {/* Dock Shelf: Frosted container with diffuse drop shadow */}
         <div
           style={{
             display: "flex",
+            height: "74px",
             alignItems: "flex-end",
-            height: "70px",
-            gap: "8px",
-            borderRadius: "24px",
-            border: "0.5px solid rgba(255, 255, 255, 0.45)",
-            background: "rgba(255, 255, 255, 0.32)",
-            padding: "0 10px 6px 10px",
+            gap: "6px",
+            borderRadius: "22px",
+            border: "1px solid rgba(255, 255, 255, 0.22)",
+            background: "rgba(68, 68, 72, 0.82)",
+            padding: "0 12px 8px 12px",
             boxShadow:
-              "0 24px 50px -10px rgba(15, 23, 42, 0.35), 0 10px 20px -6px rgba(15, 23, 42, 0.2), inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.08)",
-            backdropFilter: "blur(36px) saturate(210%) contrast(100%)",
-            WebkitBackdropFilter: "blur(36px) saturate(210%) contrast(100%)",
-            transition: "padding 180ms ease",
+              "0 22px 50px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.25)",
+            backdropFilter: "blur(50px) saturate(1.9)",
+            WebkitBackdropFilter: "blur(50px) saturate(1.9)",
+            transition: "all 200ms ease",
           }}
         >
           {dockApps.map((app) => {
@@ -162,14 +162,12 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
             );
           })}
 
-          {/* ── Apple Vertical Etched Glass Divider ── */}
+          {/* ── Vertical macOS Divider Line ── */}
           <div
             style={{
               width: "1px",
-              height: "44px",
-              background:
-                "linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0.1) 100%)",
-              boxShadow: "0.5px 0 0 rgba(0, 0, 0, 0.1)",
+              height: "48px",
+              background: "rgba(255, 255, 255, 0.22)",
               margin: "0 3px 6px 3px",
               flexShrink: 0,
             }}
@@ -198,8 +196,8 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
             alignItems: "center",
             justifyContent: "center",
             background: "rgba(0, 0, 0, 0.35)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
           }}
           onClick={() => setIsTrashOpen(false)}
         >
@@ -211,7 +209,7 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
               maxHeight: "80vh",
               display: "flex",
               flexDirection: "column",
-              background: "rgba(255, 255, 255, 0.95)",
+              background: "rgba(255, 255, 255, 0.94)",
               backdropFilter: "blur(40px) saturate(1.8)",
               WebkitBackdropFilter: "blur(40px) saturate(1.8)",
               borderRadius: "16px",
@@ -268,29 +266,41 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
                 />
               </div>
 
-              {/* Title */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  color: "#0f172a",
-                }}
-              >
-                <img src="/dock/trash-empty.png" alt="Trash" width={18} height={18} />
-                <span>Trash — {trashCount} {trashCount === 1 ? "item" : "items"}</span>
+              {/* Title & Count */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={trashCount > 0 ? "/dock/trash-full.png" : "/dock/trash-empty.png"}
+                  alt="Trash"
+                  width={20}
+                  height={20}
+                  style={{ width: "20px", height: "20px" }}
+                />
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>
+                  Trash
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    color: "#64748b",
+                    background: "rgba(0, 0, 0, 0.06)",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {trashCount} {trashCount === 1 ? "item" : "items"}
+                </span>
               </div>
 
-              {/* Empty Trash Action Button */}
+              {/* Empty Trash Button */}
               {trashCount > 0 ? (
                 <button
                   type="button"
                   onClick={() => setEmptyConfirmOpen(true)}
                   style={{
-                    padding: "4px 12px",
-                    borderRadius: "6px",
+                    padding: "5px 12px",
+                    borderRadius: "7px",
                     fontSize: "12px",
                     fontWeight: 600,
                     color: "#dc2626",
@@ -307,28 +317,28 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
               )}
             </div>
 
-            {/* Confirmation Dialog for Empty Trash */}
+            {/* Empty Confirmation Banner */}
             {emptyConfirmOpen && (
               <div
                 style={{
-                  padding: "12px 18px",
-                  background: "rgba(254, 242, 242, 0.95)",
-                  borderBottom: "1px solid #fecaca",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  padding: "10px 18px",
+                  background: "#fef2f2",
+                  borderBottom: "1px solid #fee2e2",
                   fontSize: "12px",
                   color: "#991b1b",
                 }}
               >
-                <span>Permanently delete all {trashCount} items? This action cannot be undone.</span>
+                <span>Are you sure you want to permanently erase all items in Trash?</span>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button
                     type="button"
                     onClick={() => setEmptyConfirmOpen(false)}
                     style={{
                       padding: "4px 10px",
-                      borderRadius: "5px",
+                      borderRadius: "6px",
                       background: "#ffffff",
                       border: "1px solid #cbd5e1",
                       fontSize: "11px",
@@ -341,54 +351,65 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      emptyAllTrash();
+                    onClick={async () => {
+                      await emptyAllTrash();
                       setEmptyConfirmOpen(false);
                     }}
                     style={{
                       padding: "4px 10px",
-                      borderRadius: "5px",
+                      borderRadius: "6px",
                       background: "#dc2626",
-                      border: "1px solid #b91c1c",
+                      border: "none",
                       fontSize: "11px",
                       fontWeight: 600,
                       cursor: "pointer",
                       color: "#ffffff",
                     }}
                   >
-                    Empty
+                    Empty Trash
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Trash Items List */}
+            {/* Window Content */}
             <div
               style={{
                 flex: 1,
                 overflowY: "auto",
-                padding: "12px",
+                padding: trashCount === 0 ? "48px 24px" : "12px 18px",
                 display: "flex",
                 flexDirection: "column",
                 gap: "8px",
-                minHeight: "220px",
               }}
             >
-              {trash.length === 0 ? (
+              {trashCount === 0 ? (
                 <div
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
-                    flex: 1,
-                    padding: "48px 0",
+                    gap: "12px",
                     color: "#94a3b8",
                   }}
                 >
-                  <img src="/dock/trash-empty.png" alt="Empty Trash" width={64} height={64} style={{ opacity: 0.5 }} />
-                  <p style={{ marginTop: "12px", fontSize: "14px", fontWeight: 500 }}>Trash is Empty</p>
-                  <p style={{ fontSize: "12px", color: "#cbd5e1" }}>Deleted documents will appear here</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/dock/trash-empty.png"
+                    alt="Empty Trash"
+                    width={72}
+                    height={72}
+                    style={{ opacity: 0.7 }}
+                  />
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "15px", fontWeight: 600, color: "#475569" }}>
+                      Trash is Empty
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
+                      When you delete documents from the workstation, they will appear here.
+                    </div>
+                  </div>
                 </div>
               ) : (
                 trash.map((item) => (
@@ -399,19 +420,21 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
                       alignItems: "center",
                       justifyContent: "space-between",
                       padding: "10px 14px",
-                      borderRadius: "8px",
+                      borderRadius: "10px",
                       background: "#ffffff",
                       border: "1px solid rgba(0, 0, 0, 0.06)",
-                      gap: "12px",
+                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+                      gap: "14px",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
                       <div
                         style={{
-                          width: "32px",
-                          height: "32px",
-                          borderRadius: "6px",
+                          width: "36px",
+                          height: "36px",
+                          borderRadius: "8px",
                           background: "#f1f5f9",
+                          border: "1px solid #e2e8f0",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -543,7 +566,7 @@ export function MacOsDock({ activeId }: { activeId?: string }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Individual Dock Item with Apple Continuous Cosine Wave Magnification
+   Individual Dock Item with macOS Magnification & Running Dot
    ───────────────────────────────────────────────────────────────────────────── */
 
 function DockItem({
@@ -562,18 +585,16 @@ function DockItem({
   const ref = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Authentic Apple Continuous Cosine Wave Magnification
-  // Target icon scales up to 1.48x; neighboring icons scale smoothly along the cosine bell curve
   let scale = 1;
   if (mouseX !== null && ref.current) {
     const rect = ref.current.getBoundingClientRect();
     const iconCenter = rect.left + rect.width / 2;
     const distance = Math.abs(mouseX - iconCenter);
-    const maxDistance = 145; // Influence radius spanning ~2.5 icons
+    const maxDistance = 140;
 
     if (distance < maxDistance) {
-      const factor = (Math.cos((distance / maxDistance) * Math.PI) + 1) / 2;
-      scale = 1 + 0.48 * factor;
+      const normal = 1 - distance / maxDistance;
+      scale = 1 + 0.42 * Math.sin((normal * Math.PI) / 2);
     }
   }
 
@@ -591,54 +612,36 @@ function DockItem({
         transformOrigin: "bottom center",
         transition:
           mouseX === null
-            ? "transform 0.24s cubic-bezier(0.16, 1, 0.3, 1)"
+            ? "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)"
             : "none",
-        paddingBottom: "2px",
       }}
     >
-      {/* Apple-Style Dark Glass Tooltip with Pointer Caret */}
+      {/* Tooltip */}
       <div
         className={cn(
-          "pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[7px] px-2.5 py-1 text-[11.5px] font-medium text-white shadow-2xl transition-all duration-150 z-50 flex items-center justify-center",
+          "pointer-events-none absolute -top-11 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-medium text-white shadow-xl transition-all duration-180 z-50",
           isHovered
             ? "translate-y-0 opacity-100 scale-100"
-            : "translate-y-1 opacity-0 scale-95"
+            : "translate-y-1.5 opacity-0 scale-95"
         )}
         style={{
-          background: "rgba(28, 28, 32, 0.86)",
-          backdropFilter: "blur(24px) saturate(1.8)",
-          WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-          border: "0.5px solid rgba(255, 255, 255, 0.24)",
-          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2)",
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif",
-          letterSpacing: "-0.01em",
+          background: "rgba(24, 24, 28, 0.88)",
+          backdropFilter: "blur(16px)",
+          border: "1px solid rgba(255, 255, 255, 0.15)",
         }}
       >
         {app.name}
-        {/* Tooltip downward caret arrow */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "-4px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: 0,
-            height: 0,
-            borderLeft: "4px solid transparent",
-            borderRight: "4px solid transparent",
-            borderTop: "4px solid rgba(28, 28, 32, 0.86)",
-          }}
-        />
       </div>
 
-      {/* App Icon Button with Subtle Apple Soft Drop Shadow */}
+      {/* App Icon Button — Using real macOS system-extracted PNG icons */}
       <button
         type="button"
         onClick={onClick}
         className="relative flex items-center justify-center outline-none cursor-pointer transition-transform active:scale-95"
         style={{
-          width: "50px",
-          height: "50px",
+          width: "52px",
+          height: "52px",
+          borderRadius: "12px",
           padding: 0,
           background: "transparent",
           border: "none",
@@ -649,15 +652,15 @@ function DockItem({
         <img
           src={app.iconSrc}
           alt={app.name}
-          width={50}
-          height={50}
+          width={52}
+          height={52}
           draggable={false}
           style={{
-            width: "50px",
-            height: "50px",
+            width: "52px",
+            height: "52px",
             objectFit: "contain",
             pointerEvents: "none",
-            filter: "drop-shadow(0 3px 6px rgba(0, 0, 0, 0.18))",
+            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
           }}
         />
 
@@ -688,17 +691,17 @@ function DockItem({
         )}
       </button>
 
-      {/* Running Indicator Dot (Centered directly beneath active apps) */}
+      {/* Running Indicator Dot (Matching Finder & Safari in screenshot) */}
       <span
         style={{
           width: "4px",
           height: "4px",
           borderRadius: "50%",
           marginTop: "3px",
-          background: "rgba(15, 23, 42, 0.85)",
-          opacity: app.isRunning ? 1 : 0,
-          boxShadow: app.isRunning ? "0 0 3px rgba(15, 23, 42, 0.5)" : "none",
-          transition: "opacity 180ms ease, transform 180ms ease",
+          background: "#ffffff",
+          opacity: app.isRunning ? 0.95 : 0,
+          boxShadow: app.isRunning ? "0 0 6px rgba(255,255,255,0.9)" : "none",
+          transition: "all 200ms ease",
         }}
       />
     </div>

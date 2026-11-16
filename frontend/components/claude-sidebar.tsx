@@ -230,7 +230,7 @@ export function ClaudeSidebar({
           </button>
         </div>
 
-        {/* Navigation Action Rows: Search, Projects, Customize */}
+        {/* Navigation Action Rows: Search, Projects */}
         <div style={{ padding: "4px 12px 10px 12px", display: "flex", flexDirection: "column", gap: "2px" }}>
           {/* Search */}
           <button
@@ -261,7 +261,7 @@ export function ClaudeSidebar({
             <span>Search</span>
           </button>
 
-          {/* Projects */}
+          {/* Projects (Folder Component) */}
           <button
             type="button"
             onClick={() => setIsProjectsOpen(true)}
@@ -287,48 +287,6 @@ export function ClaudeSidebar({
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
             <span>Projects</span>
-          </button>
-
-          {/* Customize (Connectors & Plugins) */}
-          <button
-            type="button"
-            onClick={() => setIsCustomizeOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "13.5px",
-              color: "#334155",
-              textAlign: "left",
-              width: "100%",
-              transition: "background 150ms ease",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-            </svg>
-            <span>Customize</span>
-            <span
-              style={{
-                marginLeft: "auto",
-                fontSize: "10px",
-                fontWeight: 600,
-                color: "#4f46e5",
-                background: "rgba(79, 70, 229, 0.08)",
-                padding: "2px 6px",
-                borderRadius: "6px",
-              }}
-            >
-              Plugins
-            </span>
           </button>
         </div>
 

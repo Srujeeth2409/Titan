@@ -232,10 +232,26 @@ export default function DirectoryPage() {
               <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                 <button
                   onClick={() => router.push(`/app/mail`)}
-                  className="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                  className="flex-1 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 >
-                  <Mail className="w-3.5 h-3.5 text-slate-300" />
-                  <span>Send Corporate Email</span>
+                  <Mail className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Email</span>
+                </button>
+
+                <button
+                  onClick={() => router.push(`/app/chat`)}
+                  className="flex-1 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Chat</span>
+                </button>
+
+                <button
+                  onClick={() => router.push(`/app/calendar`)}
+                  className="flex-1 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Meet</span>
                 </button>
               </div>
             </div>

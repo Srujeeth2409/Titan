@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class LogEventCreate(BaseModel):
@@ -27,7 +27,7 @@ class LogEventResponse(BaseModel):
     level: str
     message: str
     timestamp: datetime
-    metadata: dict = Field(validation_alias="event_metadata")
+    metadata: dict = Field(default_factory=dict, validation_alias=AliasChoices("log_metadata", "event_metadata", "metadata"))
     created_at: datetime
 
 
