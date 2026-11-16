@@ -290,20 +290,16 @@ const RDF_CSS = `
 .rdf-root {
   position: relative; display: grid; width: 100%; overflow: hidden; isolation: isolate;
   background: var(--rdf-paper); color: var(--rdf-ink); font-family: var(--rdf-sans);
-  -webkit-font-smoothing: antialiased; --rdf-pad: clamp(20px, 3.2vw, 30px);
+  border-top: 1px solid var(--rdf-line);
+  -webkit-font-smoothing: antialiased; --rdf-pad: var(--gut, clamp(20px, 5.7vw, 82px));
 }
 .rdf-frame {
   position: relative; display: grid; grid-template-rows: auto auto minmax(var(--rdf-scene-min), 1fr);
-  width: 100%; max-width: var(--rdf-max); margin: 0 auto;
+  width: 100%; max-width: var(--rdf-max, 100%); margin: 0 auto;
 }
 .rdf-frame::before, .rdf-frame::after {
-  content: ""; position: absolute; top: 0; bottom: 0; width: 1px; z-index: 3; pointer-events: none;
-  background: var(--rdf-line); transform: scaleY(0); transform-origin: 50% 0;
-  transition: transform 1.4s cubic-bezier(.2,.7,.1,1);
+  display: none;
 }
-.rdf-frame::before { left: 0; }
-.rdf-frame::after { right: 0; transition-delay: .08s; }
-.rdf-in .rdf-frame::before, .rdf-in .rdf-frame::after { transform: scaleY(1); }
 
 .rdf-r {
   opacity: 0; transform: translateY(12px); filter: blur(5px);
@@ -314,9 +310,11 @@ const RDF_CSS = `
 
 .rdf-top {
   position: relative; z-index: 2; display: grid;
-  grid-template-columns: minmax(0, 1.9fr) repeat(var(--rdf-n), minmax(0, 1fr));
-  gap: 28px; padding: clamp(44px, 6.4vw, 80px) var(--rdf-pad) clamp(30px, 4vw, 52px);
+  grid-template-columns: minmax(240px, 1.8fr) repeat(var(--rdf-n), minmax(0, 1fr));
+  gap: 32px clamp(20px, 3.5vw, 44px); padding: clamp(48px, 6vw, 80px) var(--rdf-pad) clamp(30px, 4vw, 52px);
+  width: 100%;
 }
+.rdf-col { min-width: 0; }
 .rdf-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 22px; }
 .rdf-logo {
   display: inline-flex; align-items: center; gap: 10px; color: var(--rdf-ink); text-decoration: none;
@@ -340,8 +338,8 @@ const RDF_CSS = `
 }
 .rdf-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
 .rdf-link {
-  position: relative; display: inline-flex; align-items: center; gap: 8px;
-  color: var(--rdf-ink); text-decoration: none; font-size: 14px; line-height: 1.35; letter-spacing: -.005em;
+  position: relative; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 8px;
+  max-width: 100%; color: var(--rdf-ink); text-decoration: none; font-size: 14px; line-height: 1.35; letter-spacing: -.005em;
   transition: color .3s ease, transform .5s cubic-bezier(.2,.7,.1,1);
 }
 .rdf-link::before {
@@ -351,7 +349,7 @@ const RDF_CSS = `
 .rdf-link:hover { color: var(--rdf-accent); transform: translateX(7px); }
 .rdf-link:hover::before { transform: scaleX(1); }
 .rdf-badge {
-  font: 500 9px/1 var(--rdf-mono); letter-spacing: .1em; text-transform: uppercase; padding: 4px 6px 3px; border-radius: 99px;
+  flex-shrink: 0; font: 500 9px/1 var(--rdf-mono); letter-spacing: .1em; text-transform: uppercase; padding: 4px 6px 3px; border-radius: 99px;
   color: var(--rdf-accent); background: color-mix(in srgb, var(--rdf-accent) 11%, transparent);
 }
 .rdf-link:focus-visible, .rdf-logo:focus-visible, .rdf-social a:focus-visible, .rdf-credit:focus-visible {
@@ -393,9 +391,11 @@ const RDF_CSS = `
 }
 .rdf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
+@media (max-width: 1100px) {
+  .rdf-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 32px; }
+  .rdf-brand { grid-column: 1 / -1; max-width: 46ch; }
+}
 @media (max-width: 760px) {
-  .rdf-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 36px; }
-  .rdf-brand { grid-column: 1 / -1; }
   .rdf-bar { flex-direction: column; align-items: flex-start; gap: 6px; }
   .rdf-scene { margin-top: -40px; }
 }
@@ -425,7 +425,7 @@ export default function RidgelineDitherFooter({
   radius = 130,
   interactive = true,
   altimeter = true,
-  maxWidth = "1120px",
+  maxWidth = "100%",
   fontFamily = SANS_STACK,
   monoFamily = MONO_STACK,
   height = "680px",

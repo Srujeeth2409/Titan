@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { GradientBackground } from "@/components/ui/noisy-gradient-backgrounds";
 import { useAuth } from "@/lib/auth-context";
-import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, ArrowLeft } from "lucide-react";
 
 export interface LoginFormProps {
   className?: string;
@@ -113,12 +114,21 @@ export function LoginForm({
             noisePatternRefreshInterval={2}
           >
             <div className="absolute inset-0 flex flex-col justify-between p-10 text-white bg-gradient-to-t from-black/40 via-transparent to-black/20">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center font-bold text-xl border border-white/30 shadow-lg">
+              <Link
+                href="/"
+                className="group flex items-center gap-3 transition-opacity hover:opacity-90"
+                title="Return to homepage"
+              >
+                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center font-bold text-xl border border-white/30 shadow-lg group-hover:scale-105 transition-transform">
                   T
                 </div>
-                <span className="text-xl font-bold tracking-tight drop-shadow-sm">Titan</span>
-              </div>
+                <div className="flex flex-col">
+                  <span className="text-xl font-bold tracking-tight drop-shadow-sm">Titan</span>
+                  <span className="text-[11px] text-white/70 flex items-center gap-1 group-hover:text-white transition-colors">
+                    <ArrowLeft className="w-3 h-3" /> Back to home
+                  </span>
+                </div>
+              </Link>
 
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-medium text-white tracking-wide uppercase">
@@ -150,6 +160,13 @@ export function LoginForm({
       <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 sm:p-12 text-zinc-900 dark:text-zinc-100">
         <form onSubmit={handleSubmit} className="w-full max-w-sm flex flex-col">
           <div className="text-center md:text-left mb-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors mb-4 group"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+              <span>Back to home</span>
+            </Link>
             <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
               {mode === "signin" ? "Sign in" : "Create account"}
             </h2>

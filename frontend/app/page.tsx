@@ -124,38 +124,34 @@ export default function TitanLandingPage() {
 
         let opacity = 0;
         let col = ghostCol;
-        let blur = 8;
 
         if (t <= 0) {
           opacity = 0;
           col = ghostCol;
-          blur = 8;
-        } else if (t <= 0.35) {
-          const f = t / 0.35;
-          opacity = f;
+        } else if (t <= 0.45) {
+          const f = t / 0.45;
+          opacity = 0.45 + 0.55 * f;
           col = ghostCol;
-          blur = 8 - 6.5 * f; // 8px -> 1.5px
-        } else if (t <= 0.7) {
-          const f = (t - 0.35) / 0.35;
+        } else if (t <= 0.75) {
+          const f = (t - 0.45) / 0.3;
           opacity = 1;
           col = lerpColor(ghostCol, accentCol, f);
-          blur = 1.5 * (1 - f); // 1.5px -> 0px
         } else {
-          const f = (t - 0.7) / 0.3;
+          const f = (t - 0.75) / 0.25;
           opacity = 1;
           col = lerpColor(accentCol, actualFinal, f);
-          blur = 0;
         }
 
         el.style.opacity = opacity.toFixed(3);
         el.style.color = col;
-        el.style.filter = blur > 0.05 ? `blur(${blur.toFixed(2)}px)` : "none";
       }
     }
 
     // Select elements
     const h1 = document.getElementById("h1");
     const stmt = document.getElementById("stmt");
+    const stmtWrap = document.getElementById("stmt-wrap");
+    const points = document.getElementById("points");
     const h2 = document.getElementById("h2");
     const nav = document.getElementById("nav");
     const row = document.getElementById("row");
@@ -166,9 +162,11 @@ export default function TitanLandingPage() {
     const stmtChars = stmt ? splitLetters(stmt) : [];
     const h2Chars = h2 ? splitLetters(h2) : [];
 
-    // Initial paint at p = 0
-    paint(h1Chars, 0, 0.35, "#0b1d3a", "#3f7cff", "#ffffff", "#5b7cf0");
-    paint(stmtChars, 0, 0.16, "#0b1d3a", "#3f7cff", "#ffffff");
+    // Ghost is a visible ink wash so the line is readable while it resolves,
+    // instead of staying white-on-white until the scroll has moved on.
+    const inkGhost = "#c5d0e2";
+    paint(h1Chars, 0, 0.35, "#0b1d3a", "#3f7cff", inkGhost, "#5b7cf0");
+    paint(stmtChars, 0, 0.16, "#0b1d3a", "#3f7cff", inkGhost);
     paint(h2Chars, 0, 0.35, "#ffffff", "#8fe6f4", "#5c6f92");
 
     // ── 2. Canvas Bowl Glow Algorithm ──
@@ -252,6 +250,7 @@ export default function TitanLandingPage() {
 
     let rafId = 0;
     let startTime = 0;
+    let heroDone = false;
 
     function render(timestamp: number) {
       if (!startTime) startTime = timestamp;
@@ -359,10 +358,14 @@ export default function TitanLandingPage() {
 
       context.putImageData(imgData, 0, 0);
 
-      // Hero headline time-based letter reveal over 1.25s
-      const heroElapsed = t / 1000;
-      const heroP = clamp(heroElapsed / 1.25);
-      paint(h1Chars, heroP, 0.35, "#0b1d3a", "#3f7cff", "#ffffff", "#5b7cf0");
+      // Headline resolves in one short pass, then this loop stops touching it
+      // so scroll painting is not competing with a per-frame letter redraw.
+      if (!heroDone) {
+        const heroElapsed = t / 1000;
+        const heroP = clamp(heroElapsed / 0.7);
+        paint(h1Chars, heroP, 0.28, "#0b1d3a", "#3f7cff", inkGhost, "#5b7cf0");
+        if (heroP >= 1) heroDone = true;
+      }
 
       rafId = requestAnimationFrame(render);
     }
@@ -375,23 +378,22 @@ export default function TitanLandingPage() {
       const scrollY = window.scrollY || window.pageYOffset || 0;
       const q = scrollY / innerH;
 
-      // Statement rise & reveal (smoothly timed across all 4 lines)
-      if (stmt) {
-        const s = clamp((q - 0.65) / 0.55);
-        const transY = 0.205 * Math.pow(1 - s, 2) * innerH;
-        stmt.style.transform = `translateY(${transY.toFixed(2)}px)`;
+      // Statement finishes while it is still settling into the middle of the
+      // viewport. The old window ran more than a full screen behind the scroll.
+      if (stmtWrap) {
+        const s = clamp((q - 0.42) / 0.28);
+        const transY = 0.06 * Math.pow(1 - s, 2) * innerH;
+        stmtWrap.style.transform = `translateY(${transY.toFixed(2)}px)`;
 
-        // Calibrated reveal window ensuring lines 3 & 4 reveal gracefully and stay crisp
-        const p = clamp((q - 0.65) / 1.05);
-        paint(stmtChars, p, 0.22, "#0b1d3a", "#3f7cff", "#ffffff");
+        const p = clamp((q - 0.38) / 0.36);
+        paint(stmtChars, p, 0.12, "#0b1d3a", "#3f7cff", inkGhost);
 
-        // Nav CTA pill pop
+        if (points) {
+          points.classList.toggle("on", p > 0.62);
+        }
+
         if (nav) {
-          if (p > 0.4) {
-            nav.classList.add("on");
-          } else {
-            nav.classList.remove("on");
-          }
+          nav.classList.toggle("on", p > 0.35);
         }
       }
 
@@ -402,13 +404,12 @@ export default function TitanLandingPage() {
         const p2 = clamp((0.8 - splitTop / innerH) / 0.65);
         paint(h2Chars, p2, 0.35, "#ffffff", "#8fe6f4", "#5c6f92");
 
-        // Seamless exit fade for statement as dark split advances
-        if (stmt) {
+        if (stmtWrap) {
           if (splitTop / innerH < 0.85) {
             const exitP = clamp((0.85 - splitTop / innerH) / 0.45);
-            stmt.style.opacity = (1 - exitP * 0.95).toFixed(3);
+            stmtWrap.style.opacity = (1 - exitP * 0.95).toFixed(3);
           } else {
-            stmt.style.opacity = "1";
+            stmtWrap.style.opacity = "1";
           }
         }
 
@@ -778,32 +779,69 @@ export default function TitanLandingPage() {
           }
         }
 
-        /* ── Statement (Pinned) ── */
+        /* ── Statement — one short hold, not a multi-screen empty pin ── */
         .statement {
           position: relative;
-          height: 306vh;
-          margin-top: -31vh;
+          height: 118vh;
+          margin-top: -4vh;
           pointer-events: none;
         }
         .pin {
           position: sticky;
           top: 0;
           height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .stmt-wrap {
+          width: min(92vw, 1040px);
+          margin: 0 auto;
+          will-change: transform, opacity;
         }
         #stmt {
-          position: absolute;
-          top: 41.5vh;
-          left: 0;
-          right: 0;
+          position: relative;
           text-align: center;
           font-weight: 400;
           font-size: clamp(20px, 2.7vw, 40px);
           line-height: 1.24;
           letter-spacing: -0.03em;
           color: var(--ink);
-          max-width: min(92vw, 1200px);
           margin: 0 auto;
-          will-change: transform, opacity;
+        }
+        .stmt-points {
+          list-style: none;
+          margin: 36px auto 0;
+          padding: 0;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 22px;
+          text-align: left;
+          opacity: 0;
+          transform: translateY(10px);
+          transition: opacity .55s var(--ease), transform .55s var(--ease);
+        }
+        .stmt-points.on {
+          opacity: 1;
+          transform: none;
+        }
+        .stmt-points li {
+          border-top: 1px solid rgba(11, 29, 58, 0.12);
+          padding-top: 14px;
+        }
+        .stmt-points strong {
+          display: block;
+          font-weight: 500;
+          font-size: 15px;
+          letter-spacing: -0.02em;
+          color: var(--ink);
+          margin-bottom: 6px;
+        }
+        .stmt-points span {
+          display: block;
+          font-size: 13.5px;
+          line-height: 1.45;
+          color: var(--ink-2);
         }
 
         /* ── Dark Split Panel ── */
@@ -867,10 +905,33 @@ export default function TitanLandingPage() {
           color: rgba(255, 255, 255, 0.5);
           max-width: 20em;
         }
-        #row p strong {
-          color: #ffffff;
-          font-weight: 500;
-        }
+          #row p strong {
+            color: #ffffff;
+            font-weight: 500;
+          }
+
+          /* Footer spans the full width and matches the website's exact margins */
+          footer.rdf-root {
+            width: 100% !important;
+            --rdf-pad: var(--gut) !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+          }
+          footer.rdf-root .rdf-frame {
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+          footer.rdf-root .rdf-top {
+            padding-left: var(--gut) !important;
+            padding-right: var(--gut) !important;
+          }
+          footer.rdf-root .rdf-bar {
+            padding-left: var(--gut) !important;
+            padding-right: var(--gut) !important;
+          }
+          footer.rdf-root .rdf-frame::before,
+          footer.rdf-root .rdf-frame::after {
+            display: none !important;
+          }
 
         .split .r {
           position: relative;
@@ -928,11 +989,17 @@ export default function TitanLandingPage() {
           #stmt {
             white-space: normal;
             font-size: 23px;
-            max-width: 15em;
+            max-width: 16em;
             margin: 0 auto;
           }
           #stmt br {
             display: none;
+          }
+          .stmt-points {
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-top: 26px;
+            max-width: 22em;
           }
 
           .split {
@@ -1165,15 +1232,31 @@ export default function TitanLandingPage() {
         {/* ── 2. Statement (Pinned) ── */}
         <section className="statement" id="statement">
           <div className="pin">
-            <p id="stmt">
-              Titan is an AI teammate
-              <br />
-              that ingests docs, searches hybrid indexes,
-              <br />
-              verifies claim citations, flags hallucinations and
-              <br />
-              does anything in between to keep teams moving
-            </p>
+            <div className="stmt-wrap" id="stmt-wrap">
+              <p id="stmt">
+                Titan is an AI teammate
+                <br />
+                that ingests docs, searches hybrid indexes,
+                <br />
+                verifies claim citations, flags hallucinations and
+                <br />
+                does anything in between to keep teams moving
+              </p>
+              <ul className="stmt-points" id="points">
+                <li>
+                  <strong>Ingest</strong>
+                  <span>Docs, mail, and meeting notes land in one index the team can actually search.</span>
+                </li>
+                <li>
+                  <strong>Hybrid retrieval</strong>
+                  <span>Multi-query search ranks dense and keyword hits together, then keeps the passages that support the answer.</span>
+                </li>
+                <li>
+                  <strong>Cited, checked</strong>
+                  <span>Every claim points at its source passage. Unsupported lines are scored and flagged before they ship.</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -1208,6 +1291,7 @@ export default function TitanLandingPage() {
 
         {/* ── 4. Ridgeline Dither Footer ── */}
         <RidgelineDitherFooter
+          maxWidth="100%"
           preset="night"
           palette={{
             paper: "#0a162b",
