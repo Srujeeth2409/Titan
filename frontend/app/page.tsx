@@ -964,7 +964,7 @@ export default function HaldenLandingPage() {
               strokeLinecap="round"
             />
           </svg>
-          <span className="brand-name">Halden</span>
+          <span className="brand-name">Titan</span>
         </Link>
 
         <nav className="nav-links">
@@ -1012,13 +1012,13 @@ export default function HaldenLandingPage() {
         {/* ── 1. Hero ── */}
         <section className="hero" id="hero">
           <h1 id="h1">
-            Meet <span className="hl">Hal</span>, your AI teammate
+            Meet <span className="hl">Titan</span>, your AI teammate
             <br />
-            for port operators
+            for enterprise knowledge
           </h1>
 
           <p className="trust fade-up" style={{ "--d": "1.15s" } as React.CSSProperties}>
-            Port operators trust Halden
+            Enterprise teams trust Titan
           </p>
 
           <div className="hero-cta fade-up" style={{ "--d": "1.3s" } as React.CSSProperties}>
@@ -1040,7 +1040,7 @@ export default function HaldenLandingPage() {
 
           {/* 4x2 Logo Grid */}
           <div className="logos">
-            {/* Cell 1: OCEANEX */}
+            {/* Cell 1: DATAFORT */}
             <div className="logo-cell fade-up" style={{ "--d": "1.25s" } as React.CSSProperties}>
               <div className="logo-item">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -1057,11 +1057,11 @@ export default function HaldenLandingPage() {
                     strokeLinecap="round"
                   />
                 </svg>
-                <span>OCEANEX</span>
+                <span>DATAFORT</span>
               </div>
             </div>
 
-            {/* Cell 2: Nordhavn */}
+            {/* Cell 2: Vantage */}
             <div className="logo-cell fade-up" style={{ "--d": "1.32s" } as React.CSSProperties}>
               <div
                 className="logo-item"
@@ -1073,11 +1073,11 @@ export default function HaldenLandingPage() {
                   letterSpacing: "0.02em",
                 }}
               >
-                <span>Nordhavn</span>
+                <span>Vantage</span>
               </div>
             </div>
 
-            {/* Cell 3: BLUEGATE */}
+            {/* Cell 3: SYNTHEX */}
             <div className="logo-cell fade-up" style={{ "--d": "1.39s" } as React.CSSProperties}>
               <div className="logo-item">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -1085,17 +1085,17 @@ export default function HaldenLandingPage() {
                   <rect x="8" y="5" width="3.5" height="15" fill="#3e4d68" rx="0.8" />
                   <rect x="14" y="8" width="3.5" height="12" fill="#3e4d68" rx="0.8" />
                 </svg>
-                <span>BLUEGATE</span>
+                <span>SYNTHEX</span>
               </div>
             </div>
 
-            {/* Cell 4: KELPWAY */}
+            {/* Cell 4: CELERIS */}
             <div className="logo-cell fade-up" style={{ "--d": "1.46s" } as React.CSSProperties}>
               <div className="logo-item" style={{ fontSize: "11px", fontWeight: 500, letterSpacing: ".32em" }}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <polygon points="10,2 18,18 2,18" stroke="#3e4d68" strokeWidth="2" strokeLinejoin="round" />
                 </svg>
-                <span>KELPWAY</span>
+                <span>CELERIS</span>
               </div>
             </div>
 
@@ -1116,34 +1116,34 @@ export default function HaldenLandingPage() {
               </div>
             </div>
 
-            {/* Cell 6: HARBORIX */}
+            {/* Cell 6: STRATA */}
             <div className="logo-cell row-2 fade-up" style={{ "--d": "1.49s" } as React.CSSProperties}>
               <div className="logo-item">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <path d="M4 2v16M16 2v16M4 10h12" stroke="#3e4d68" strokeWidth="3" strokeLinecap="round" />
                 </svg>
-                <span>HARBORIX</span>
+                <span>STRATA</span>
               </div>
             </div>
 
-            {/* Cell 7: seaflux */}
+            {/* Cell 7: omnilux */}
             <div className="logo-cell row-2 fade-up" style={{ "--d": "1.56s" } as React.CSSProperties}>
               <div className="logo-item" style={{ fontSize: "15px", fontWeight: 500, textTransform: "lowercase" }}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <circle cx="10" cy="10" r="7.5" stroke="#3e4d68" strokeWidth="2" />
                   <circle cx="10" cy="10" r="2.2" fill="#3e4d68" />
                 </svg>
-                <span>seaflux</span>
+                <span>omnilux</span>
               </div>
             </div>
 
-            {/* Cell 8: PORTERRA */}
+            {/* Cell 8: VERITAS */}
             <div className="logo-cell row-2 fade-up" style={{ "--d": "1.63s" } as React.CSSProperties}>
               <div className="logo-item" style={{ fontSize: "11px", letterSpacing: ".24em" }}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <polygon points="10,3 19,17 1,17" fill="#3e4d68" />
                 </svg>
-                <span>PORTERRA</span>
+                <span>VERITAS</span>
               </div>
             </div>
           </div>
@@ -1153,13 +1153,13 @@ export default function HaldenLandingPage() {
         <section className="statement" id="statement">
           <div className="pin">
             <p id="stmt">
-              Hal is an AI teammate
+              Titan is an AI teammate
               <br />
-              that tracks vessels, books berths, files customs,
+              that ingests docs, searches hybrid indexes,
               <br />
-              coordinates crews, escalates and does anything
+              verifies claim citations, flags hallucinations and
               <br />
-              in between to keep a port moving
+              does anything in between to keep teams moving
             </p>
           </div>
         </section>
@@ -1171,15 +1171,15 @@ export default function HaldenLandingPage() {
             <h2 id="h2">
               AI teammate that operates
               <br />
-              like you work
+              like your team works
             </h2>
 
             <div id="row">
-              <h3>Port operators</h3>
+              <h3>Enterprise teams</h3>
               <p>
-                <strong>Berth faster. Clear more. Stop chasing manifests.</strong> Hal runs
-                scheduling, bookings, customs filings, and more — so your team stays focused on
-                throughput and safety.
+                <strong>Retrieve faster. Ground every answer. Stop chasing manifests.</strong> Titan runs
+                multi-query retrieval, hybrid ranking, citation checks, and hallucination scoring — so your team stays focused on
+                throughput and verified answers.
               </p>
             </div>
           </div>
