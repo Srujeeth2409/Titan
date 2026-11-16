@@ -1,1061 +1,1198 @@
 "use client";
 
+import React, { useEffect, useRef } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import type { CSSProperties, FormEvent } from "react";
-import { PromptInput } from "@/components/prompt-input";
 
-const SECTION_IDS = ["home", "about", "services", "contact"] as const;
+export default function HaldenLandingPage() {
+  const initializedRef = useRef(false);
 
-const navLinks = [
-    { id: "home", label: "Home", href: "/" },
-    { id: "about", label: "About", href: "#about" },
-    { id: "services", label: "Services", href: "#services" },
-    { id: "contact", label: "Contact", href: "#contact" },
-];
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
-const values = [
-    {
-        title: "Clarity",
-        text: "One definition per metric, one place to read it. No more debating whose number is right.",
-    },
-    {
-        title: "Trust",
-        text: "Every answer points back to the data behind it, so decisions rest on evidence.",
-    },
-    {
-        title: "Speed",
-        text: "Ask in plain language and get the signal in seconds instead of waiting on a report.",
-    },
-];
-
-const services = [
-    {
-        num: "01",
-        title: "Data unification",
-        text: "Connect the tools and sources your team already uses and bring every metric into one consistent view.",
-    },
-    {
-        num: "02",
-        title: "Natural-language answers",
-        text: "Ask questions the way you would ask a colleague and get a direct answer drawn from all your data.",
-    },
-    {
-        num: "03",
-        title: "Source-verified insights",
-        text: "Each answer comes with its sources and a confidence score, so you can check it before you act on it.",
-    },
-    {
-        num: "04",
-        title: "Onboarding and support",
-        text: "Hands-on setup and ongoing help, so your team gets value from day one and keeps getting it.",
-    },
-];
-
-const delay = (ms: number) => ({ "--d": `${ms}ms` } as CSSProperties);
-
-export default function HomePage() {
-    const [scrolled, setScrolled] = useState(false);
-    const [active, setActive] = useState<string>("home");
-    const [sent, setSent] = useState(false);
-
-    useEffect(() => {
-        document.documentElement.classList.add("vx-js");
-
-        // Header gets a frosted background once the page scrolls
-        const onScroll = () => setScrolled(window.scrollY > 24);
-        onScroll();
-        window.addEventListener("scroll", onScroll, { passive: true });
-
-        // Reveal-on-scroll
-        const revealObserver = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add("is-visible");
-                        revealObserver.unobserve(entry.target);
-                    }
-                });
-            },
-            { threshold: 0.12 }
-        );
-        document.querySelectorAll(".vx-reveal").forEach((el) => revealObserver.observe(el));
-
-        // Highlight the nav item for the section in view
-        const sectionObserver = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) setActive(entry.target.id);
-                });
-            },
-            { rootMargin: "-45% 0px -50% 0px" }
-        );
-        SECTION_IDS.forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) sectionObserver.observe(el);
-        });
-
-        return () => {
-            window.removeEventListener("scroll", onScroll);
-            revealObserver.disconnect();
-            sectionObserver.disconnect();
-            document.documentElement.classList.remove("vx-js");
-        };
-    }, []);
-
-    const handleContactSubmit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        // UI-only for now: connect this to your backend or an email service
-        setSent(true);
+    // Helpers
+    const clamp = (v: number, min = 0, max = 1) => Math.max(min, Math.min(max, v));
+    const smoothstep = (x: number) => {
+      const c = clamp(x);
+      return c * c * (3 - 2 * c);
     };
 
-    const navLinkStyle = (isActive: boolean): CSSProperties => ({
-        position: "relative",
-        fontSize: "16px",
-        fontWeight: 430,
-        letterSpacing: "-.36px",
-        color: isActive ? "#ffffff" : "rgba(229,229,230,.77)",
-        textShadow: "0 1px 3px rgba(0,0,0,.55)",
-        textDecoration: "none",
-        transition: "color .2s",
-    });
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-    return (
-        <div className="page-root">
-            <style jsx global>{`
-        html {
-          scroll-behavior: smooth;
+    function hexToRgb(hex: string): [number, number, number] {
+      const h = hex.replace("#", "");
+      if (h.length === 3) {
+        return [
+          parseInt(h[0] + h[0], 16),
+          parseInt(h[1] + h[1], 16),
+          parseInt(h[2] + h[2], 16),
+        ];
+      }
+      return [
+        parseInt(h.slice(0, 2), 16),
+        parseInt(h.slice(2, 4), 16),
+        parseInt(h.slice(4, 6), 16),
+      ];
+    }
+
+    function lerpColor(c1: string, c2: string, t: number): string {
+      const [r1, g1, b1] = hexToRgb(c1);
+      const [r2, g2, b2] = hexToRgb(c2);
+      const r = Math.round(lerp(r1, r2, t));
+      const g = Math.round(lerp(g1, g2, t));
+      const b = Math.round(lerp(b1, b2, t));
+      return `rgb(${r},${g},${b})`;
+    }
+
+    // ── 1. Split Text into character spans ──
+    function splitLetters(el: HTMLElement) {
+      const nodes = Array.from(el.childNodes);
+      el.innerHTML = "";
+      const chars: HTMLElement[] = [];
+
+      nodes.forEach((node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent || "";
+          const words = text.split(/(\s+)/);
+          words.forEach((w) => {
+            if (/^\s+$/.test(w)) {
+              el.appendChild(document.createTextNode(w));
+            } else if (w.length > 0) {
+              const wordSpan = document.createElement("span");
+              wordSpan.style.display = "inline-block";
+              wordSpan.style.whiteSpace = "nowrap";
+              for (const ch of w) {
+                const charSpan = document.createElement("span");
+                charSpan.className = "ch";
+                charSpan.textContent = ch;
+                wordSpan.appendChild(charSpan);
+                chars.push(charSpan);
+              }
+              el.appendChild(wordSpan);
+            }
+          });
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const elem = node as HTMLElement;
+          if (elem.tagName.toLowerCase() === "br") {
+            el.appendChild(document.createElement("br"));
+            // ensure a space follows so words don't join when br is hidden on mobile
+            el.appendChild(document.createTextNode(" "));
+          } else {
+            const isHl = elem.classList.contains("hl");
+            const text = elem.textContent || "";
+            const words = text.split(/(\s+)/);
+            words.forEach((w) => {
+              if (/^\s+$/.test(w)) {
+                el.appendChild(document.createTextNode(w));
+              } else if (w.length > 0) {
+                const wordSpan = document.createElement("span");
+                wordSpan.style.display = "inline-block";
+                wordSpan.style.whiteSpace = "nowrap";
+                for (const ch of w) {
+                  const charSpan = document.createElement("span");
+                  charSpan.className = "ch";
+                  if (isHl) charSpan.setAttribute("data-hl", "1");
+                  charSpan.textContent = ch;
+                  wordSpan.appendChild(charSpan);
+                  chars.push(charSpan);
+                }
+                el.appendChild(wordSpan);
+              }
+            });
+          }
+        }
+      });
+      return chars;
+    }
+
+    function paint(
+      chars: HTMLElement[],
+      p: number,
+      spread: number,
+      finalCol: string,
+      accentCol: string,
+      ghostCol: string,
+      highlightCol?: string
+    ) {
+      const n = chars.length;
+      for (let i = 0; i < n; i++) {
+        const el = chars[i];
+        const isHl = el.getAttribute("data-hl") === "1";
+        const actualFinal = isHl && highlightCol ? highlightCol : finalCol;
+        const t = clamp((p * (1 + spread) - i / n) / spread);
+
+        let opacity = 0;
+        let col = ghostCol;
+        let blur = 8;
+
+        if (t <= 0) {
+          opacity = 0;
+          col = ghostCol;
+          blur = 8;
+        } else if (t <= 0.35) {
+          const f = t / 0.35;
+          opacity = f;
+          col = ghostCol;
+          blur = 8 - 6.5 * f; // 8px -> 1.5px
+        } else if (t <= 0.7) {
+          const f = (t - 0.35) / 0.35;
+          opacity = 1;
+          col = lerpColor(ghostCol, accentCol, f);
+          blur = 1.5 * (1 - f); // 1.5px -> 0px
+        } else {
+          const f = (t - 0.7) / 0.3;
+          opacity = 1;
+          col = lerpColor(accentCol, actualFinal, f);
+          blur = 0;
+        }
+
+        el.style.opacity = opacity.toFixed(3);
+        el.style.color = col;
+        el.style.filter = blur > 0.05 ? `blur(${blur.toFixed(2)}px)` : "none";
+      }
+    }
+
+    // Select elements
+    const h1 = document.getElementById("h1");
+    const stmt = document.getElementById("stmt");
+    const h2 = document.getElementById("h2");
+    const nav = document.getElementById("nav");
+    const row = document.getElementById("row");
+    const ship = document.getElementById("ship") as HTMLImageElement | null;
+    const split = document.getElementById("split");
+
+    const h1Chars = h1 ? splitLetters(h1) : [];
+    const stmtChars = stmt ? splitLetters(stmt) : [];
+    const h2Chars = h2 ? splitLetters(h2) : [];
+
+    // Initial paint at p = 0
+    paint(h1Chars, 0, 0.35, "#0b1d3a", "#3f7cff", "#ffffff", "#5b7cf0");
+    paint(stmtChars, 0, 0.16, "#0b1d3a", "#3f7cff", "#ffffff");
+    paint(h2Chars, 0, 0.35, "#ffffff", "#8fe6f4", "#5c6f92");
+
+    // ── 2. Canvas Bowl Glow Algorithm ──
+    const canvas = document.getElementById("bg") as HTMLCanvasElement;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    const context: CanvasRenderingContext2D = ctx;
+
+    const W = 96;
+    const H = 60;
+    const imgData = ctx.createImageData(W, H);
+    const data32 = new Uint32Array(imgData.data.buffer);
+
+    // Color definitions in ABGR for Uint32 Little-Endian
+    const C_WHITE = 0xffffffff;
+    const RIM_R = 210, RIM_G = 218, RIM_B = 255; // #d2daff
+    const CORE_R = 143, CORE_G = 213, CORE_B = 241; // #8fd5f1
+
+    // Scroll table
+    const scrollKeys = [
+      { q: 0.0, tip: 0.3, half: 0.34, soft: 0.22 },
+      { q: 0.03, tip: 0.45, half: 0.38, soft: 0.26 },
+      { q: 0.08, tip: 0.65, half: 0.38, soft: 0.22 },
+      { q: 0.18, tip: 0.8, half: 0.38, soft: 0.22 },
+      { q: 0.4, tip: 0.95, half: 0.38, soft: 0.19 },
+      { q: 0.66, tip: 1.05, half: 0.46, soft: 0.16 },
+      { q: 0.87, tip: 1.05, half: 0.66, soft: 0.13 },
+      { q: 1.15, tip: 1.1, half: 0.9, soft: 0.1 },
+      { q: 1.43, tip: 1.3, half: 1.6, soft: 0.1 },
+      { q: 1.8, tip: 2.4, half: 3.0, soft: 0.1 },
+    ];
+
+    function getScrollTargets(q: number) {
+      if (q <= scrollKeys[0].q) return { ...scrollKeys[0] };
+      const last = scrollKeys[scrollKeys.length - 1];
+      if (q >= last.q) return { ...last };
+      for (let i = 0; i < scrollKeys.length - 1; i++) {
+        const k1 = scrollKeys[i];
+        const k2 = scrollKeys[i + 1];
+        if (q >= k1.q && q <= k2.q) {
+          const f = (q - k1.q) / (k2.q - k1.q);
+          return {
+            tip: lerp(k1.tip, k2.tip, f),
+            half: lerp(k1.half, k2.half, f),
+            soft: lerp(k1.soft, k2.soft, f),
+          };
+        }
+      }
+      return { ...last };
+    }
+
+    // Simulation state
+    let curTip = -0.3;
+    let curHalf = 0.3;
+    let curSoft = 0.1;
+    let inIntro = true;
+    let introStartTime = 0;
+
+    // Segment distance helper
+    function segDistSq(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const l2 = dx * dx + dy * dy;
+      if (l2 === 0) {
+        const dpx = px - x1, dpy = py - y1;
+        return dpx * dpx + dpy * dpy;
+      }
+      let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+      t = clamp(t);
+      const qx = x1 + t * dx;
+      const qy = y1 + t * dy;
+      const ex = px - qx, ey = py - qy;
+      return ex * ex + ey * ey;
+    }
+
+    // Polyline points cache
+    const N_POINTS = 48;
+    const polyX = new Float32Array(N_POINTS);
+    const polyY = new Float32Array(N_POINTS);
+
+    let rafId = 0;
+    let startTime = 0;
+
+    function render(timestamp: number) {
+      if (!startTime) startTime = timestamp;
+      const t = timestamp - startTime;
+
+      // Intro logic: starts at tip -0.3, half 0.3, soft 0.1. After 0.25s, eases over 1.05s to q=0 values.
+      if (inIntro) {
+        if (!introStartTime) introStartTime = timestamp;
+        const elapsed = (timestamp - introStartTime) / 1000;
+        if (elapsed < 0.25) {
+          curTip = -0.3;
+          curHalf = 0.3;
+          curSoft = 0.1;
+        } else if (elapsed < 1.3) {
+          const prog = smoothstep((elapsed - 0.25) / 1.05);
+          const t0 = scrollKeys[0];
+          curTip = lerp(-0.3, t0.tip, prog);
+          curHalf = lerp(0.3, t0.half, prog);
+          curSoft = lerp(0.1, t0.soft, prog);
+        } else {
+          inIntro = false;
+        }
+      }
+
+      // Read scroll
+      const innerH = window.innerHeight || 1;
+      const innerW = window.innerWidth || 1;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const q = scrollY / innerH;
+
+      let tgtTip = curTip;
+      let tgtHalf = curHalf;
+      let tgtSoft = curSoft;
+
+      if (!inIntro) {
+        const tgt = getScrollTargets(q);
+        tgtTip = tgt.tip;
+        tgtHalf = tgt.half;
+        tgtSoft = tgt.soft;
+
+        // Inertia
+        curTip += (tgtTip - curTip) * 0.12;
+        curHalf += (tgtHalf - curHalf) * 0.12;
+        curSoft += (tgtSoft - curSoft) * 0.12;
+      }
+
+      // Idle breathing wobble
+      const effTip = curTip + Math.sin(t * 0.00033 + 1.3) * 0.02;
+      const effHalf = curHalf + Math.sin(t * 0.0005) * 0.015;
+      const effSoft = Math.max(0.01, curSoft);
+
+      const aspect = innerW / innerH;
+
+      // Build 48 polyline points: yy from -0.3 to effTip
+      for (let i = 0; i < N_POINTS; i++) {
+        const yy = -0.3 + (i / (N_POINTS - 1)) * (effTip - -0.3);
+        const norm = Math.max(0, 1 - yy / effTip);
+        polyX[i] = effHalf * aspect * Math.pow(norm, 0.72);
+        polyY[i] = yy;
+      }
+
+      const RND = 0.25;
+
+      // Draw 96x60 buffer
+      let idx = 0;
+      for (let y = 0; y < H; y++) {
+        const py = y / H;
+        for (let x = 0; x < W; x++) {
+          const px = Math.abs(x / W - 0.5) * aspect;
+
+          // Inside check
+          const normY = py < effTip ? Math.max(0, 1 - py / effTip) : 0;
+          const curveX = effHalf * aspect * Math.pow(normY, 0.72);
+          const isInside = py < effTip && px < curveX;
+
+          // Distance to polyline segments
+          let minD2 = 1e9;
+          for (let s = 0; s < N_POINTS - 1; s++) {
+            const d2 = segDistSq(px, py, polyX[s], polyY[s], polyX[s + 1], polyY[s + 1]);
+            if (d2 < minD2) minD2 = d2;
+          }
+          const minD = Math.sqrt(minD2);
+          const rawSd = isInside ? -minD : minD;
+          const sd = rawSd - RND;
+
+          const g = 1 - smoothstep((sd + effSoft) / (2 * effSoft));
+
+          if (g <= 0.001) {
+            data32[idx++] = C_WHITE;
+          } else if (g < 0.38) {
+            const tc = smoothstep(g / 0.38);
+            const r = Math.round(lerp(255, RIM_R, tc));
+            const gr = Math.round(lerp(255, RIM_G, tc));
+            const b = Math.round(lerp(255, RIM_B, tc));
+            data32[idx++] = (0xff << 24) | (b << 16) | (gr << 8) | r;
+          } else {
+            const tc = smoothstep((g - 0.38) / 0.62);
+            const r = Math.round(lerp(RIM_R, CORE_R, tc));
+            const gr = Math.round(lerp(RIM_G, CORE_G, tc));
+            const b = Math.round(lerp(RIM_B, CORE_B, tc));
+            data32[idx++] = (0xff << 24) | (b << 16) | (gr << 8) | r;
+          }
+        }
+      }
+
+      context.putImageData(imgData, 0, 0);
+
+      // Hero headline time-based letter reveal over 1.25s
+      const heroElapsed = t / 1000;
+      const heroP = clamp(heroElapsed / 1.25);
+      paint(h1Chars, heroP, 0.35, "#0b1d3a", "#3f7cff", "#ffffff", "#5b7cf0");
+
+      rafId = requestAnimationFrame(render);
+    }
+
+    rafId = requestAnimationFrame(render);
+
+    // ── 3. Scroll Interactions ──
+    function onScroll() {
+      const innerH = window.innerHeight || 1;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const q = scrollY / innerH;
+
+      // Statement rise & reveal
+      if (stmt) {
+        const s = clamp((q - 0.69) / 0.74);
+        const transY = 0.205 * Math.pow(1 - s, 2) * innerH;
+        stmt.style.transform = `translateY(${transY.toFixed(2)}px)`;
+
+        const p = clamp((q - 0.56) / 2.03);
+        paint(stmtChars, p, 0.16, "#0b1d3a", "#3f7cff", "#ffffff");
+
+        // Nav CTA pill pop
+        if (nav) {
+          if (p > 0.4) {
+            nav.classList.add("on");
+          } else {
+            nav.classList.remove("on");
+          }
+        }
+      }
+
+      // Dark Split: headline & row & ship zoom
+      if (split) {
+        const splitRect = split.getBoundingClientRect();
+        const splitTop = splitRect.top;
+        const p2 = clamp((0.8 - splitTop / innerH) / 0.65);
+        paint(h2Chars, p2, 0.35, "#ffffff", "#8fe6f4", "#5c6f92");
+
+        if (row) {
+          if (p2 > 0.92) {
+            row.classList.add("visible");
+          } else {
+            row.classList.remove("visible");
+          }
+        }
+
+        if (ship) {
+          const scale = 1.08 - 0.08 * clamp(1 - splitTop / innerH);
+          ship.style.transform = `scale(${scale.toFixed(4)})`;
+        }
+      }
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    onScroll();
+
+    // Trigger ready after 1st frame for CSS fade-ups
+    const readyTimer = setTimeout(() => {
+      document.body.classList.add("ready");
+    }, 50);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      clearTimeout(readyTimer);
+      document.body.classList.remove("ready");
+    };
+  }, []);
+
+  return (
+    <>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap"
+      />
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        :root {
+          --ink: #0b1d3a;
+          --ink-2: #1d2f4f;
+          --accent: #5b7cf0;
+          --dot: #2fe0d0;
+          --panel: #0e1f3d;
+          --panel-line: rgba(255,255,255,.12);
+          --gut: clamp(20px, 5.7vw, 82px);
+          --ease: cubic-bezier(.22, .7, .2, 1);
+        }
+
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
         }
 
         html, body {
-          width: 100%;
+          background: #ffffff;
           overflow-x: hidden;
-          background: #000000 !important;
-          margin: 0;
-          padding: 0;
-          font-family: "Reference Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-          color: #ffffff;
+          font-family: 'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
           -webkit-font-smoothing: antialiased;
         }
 
-        .page-root {
-          --gutter-start: clamp(36px, 4.177vw, 96px);
-          --gutter-end: clamp(36px, 4.04vw, 96px);
-          --header-top: clamp(20px, 2.264vh, 30px);
-          --hero-bottom: clamp(34px, 5.19vh, 64px);
-          --display-size: clamp(58px, 7.64vh, 88px);
-          --display-leading: clamp(72px, 9.34vh, 106px);
-          --copy-size: clamp(14px, 1.70vh, 19px);
-          --copy-leading: clamp(19px, 2.17vh, 24px);
-          --title-copy-gap: clamp(15px, 2.08vh, 24px);
-          --copy-cta-gap: clamp(24px, 3.11vh, 36px);
-          --cta-width: clamp(142px, 15.09vh, 168px);
-          --cta-height: clamp(38px, 3.96vh, 44px);
-          --primary-control-font-size: clamp(17px, 1.77vh, 19.25px);
-          --control-baseline-shift: clamp(1px, .19vh, 2px);
-          --card-width: clamp(150px, 18.96vh, 215px);
-          background: #000;
-          isolation: isolate;
+        a {
+          color: inherit;
+          text-decoration: none;
         }
 
-        /* ── Hero (full screen) ── */
-        .screen-container {
+        /* ── Fixed Atmosphere Background ── */
+        .atmo {
+          position: fixed;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          background: #ffffff;
+        }
+        #bg {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+
+        main {
+          position: relative;
+          z-index: 1;
+        }
+
+        /* ── Floating Pill Navbar ── */
+        @keyframes navin {
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .nav {
+          position: fixed;
+          z-index: 50;
+          top: 20px;
+          left: var(--gut);
+          right: var(--gut);
+          height: 60px;
+          border-radius: 999px;
+          background: #ffffff;
+          display: flex;
+          align-items: center;
+          padding: 0 10px 0 22px;
+          box-shadow: 0 1px 0 rgba(11,29,58,.04), 0 10px 30px -18px rgba(11,29,58,.25);
+          opacity: 0;
+          transform: translateY(-8px);
+          animation: navin .9s var(--ease) .15s forwards;
+        }
+
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          text-decoration: none;
+        }
+        .brand-name {
+          font-size: 17px;
+          font-weight: 500;
+          letter-spacing: -0.02em;
+          color: var(--ink);
+        }
+
+        .nav-links {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          gap: 31px;
+        }
+        .nav-link {
+          font-size: 14px;
+          font-weight: 500;
+          letter-spacing: -0.005em;
+          color: var(--ink);
+          opacity: 0.92;
+          transition: opacity 0.2s;
+        }
+        .nav-link:hover {
+          opacity: 0.55;
+        }
+
+        .nav-right {
+          margin-left: auto;
+          display: flex;
+          align-items: center;
+        }
+        .nav-login {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--ink);
+          padding: 0 14px;
+          transition: padding .35s var(--ease);
+        }
+        .nav.on .nav-login {
+          padding: 0 0 0 14px;
+        }
+
+        .navcta {
+          width: 42px;
+          height: 42px;
+          overflow: hidden;
+          border-radius: 999px;
+          margin-left: -42px;
+          transform: scale(0);
+          transform-origin: 100% 50%;
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          transition: transform .35s var(--ease), width .65s var(--ease) .22s, margin .35s var(--ease);
+        }
+        .navcta .btn {
+          width: 142px;
+          flex-shrink: 0;
+        }
+        .navcta .lbl {
+          opacity: 0;
+          transition: opacity .4s var(--ease) .45s;
+        }
+        .nav.on .navcta {
+          width: 142px;
+          margin-left: 16px;
+          transform: scale(1);
+        }
+        .nav.on .navcta .lbl {
+          opacity: 1;
+        }
+
+        /* ── Button with Dot to Chevron Hover ── */
+        .btn {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          height: 42px;
+          padding: 0 46px 0 18px;
+          border-radius: 999px;
+          background: var(--ink);
+          color: #ffffff;
+          font-size: 13.5px;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          text-decoration: none;
+          cursor: pointer;
+          border: none;
+          outline: none;
+        }
+        .btn .dot {
+          position: absolute;
+          right: 16px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          background: var(--dot);
+          box-shadow: 0 0 10px rgba(47,224,208,.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: width .45s var(--ease), height .45s var(--ease), right .45s var(--ease), box-shadow .45s var(--ease);
+        }
+        .btn .dot svg {
+          opacity: 0;
+          transform: translateX(-4px);
+          transition: opacity .3s var(--ease) .05s, transform .3s var(--ease) .05s;
+        }
+        .btn:hover .dot {
+          width: 32px;
+          height: 32px;
+          right: 5px;
+          box-shadow: none;
+        }
+        .btn:hover .dot svg {
+          opacity: 1;
+          transform: translateX(0);
+        }
+
+        /* Large Hero CTA Button */
+        .btn.lg {
+          height: 62px;
+          padding: 0 62px 0 28px;
+          font-size: 17px;
+        }
+        .btn.lg .dot {
+          width: 14px;
+          height: 14px;
+          right: 24px;
+        }
+        .btn.lg:hover .dot {
+          width: 48px;
+          height: 48px;
+          right: 7px;
+        }
+
+        /* ── Hero Section (100vh, min 640px) ── */
+        .hero {
           position: relative;
           width: 100%;
           height: 100vh;
-          height: 100svh;
-          min-height: 620px;
+          min-height: 640px;
           overflow: hidden;
-          isolation: isolate;
-          background: #000;
         }
-
-        .vignette-overlay {
-          background:
-            linear-gradient(180deg, rgba(0,0,0,.03), transparent 24%, transparent 82%, rgba(0,0,0,.05)),
-            radial-gradient(ellipse at 44% 54%, transparent 30%, rgba(0,0,0,.055) 100%);
-        }
-
-        .hero-title-font {
-          font-family: "Reference Display", "Reference Sans", Arial, sans-serif;
-          font-weight: 500;
-          font-optical-sizing: auto;
-          letter-spacing: -2.1px;
-          -webkit-text-stroke: .12px currentColor;
-          white-space: nowrap;
-          text-shadow: 0 2px 2px rgba(0,0,0,.44);
-        }
-
-        .line-one-transform {
-          transform: scaleX(.775);
-          transform-origin: left center;
-          color: #ffffff;
-        }
-
-        .line-two-transform {
-          transform: scaleX(.793);
-          transform-origin: left center;
-          color: rgba(211, 207, 207, .78);
-        }
-
-        /* ── Fixed header ── */
-        .vx-header {
-          position: fixed;
-          top: var(--header-top);
-          left: var(--gutter-start);
-          right: var(--gutter-end);
-          height: 48px;
-          display: flex;
-          align-items: flex-start;
-          white-space: nowrap;
-          z-index: 60;
-        }
-
-        .vx-header-bg {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: calc(var(--header-top) + 48px + 14px);
-          z-index: 55;
-          background: rgba(0, 0, 0, .62);
-          -webkit-backdrop-filter: blur(14px) saturate(1.2);
-          backdrop-filter: blur(14px) saturate(1.2);
-          border-bottom: 1px solid rgba(255, 255, 255, .07);
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity .3s ease;
-        }
-
-        .vx-header-bg.on {
-          opacity: 1;
-        }
-
-        .vx-nav-link:hover {
-          color: #ffffff !important;
-        }
-
-        /* ── Content sections ── */
-        .vx-section {
-          position: relative;
-          padding: clamp(88px, 14vh, 160px) var(--gutter-end) clamp(88px, 14vh, 160px) var(--gutter-start);
-          background: #000;
-          border-top: 1px solid rgba(255, 255, 255, .07);
-        }
-
-        .vx-section.alt {
-          background: #070707;
-        }
-
-        .vx-container {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .vx-eyebrow {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 22px;
-          font-size: 13px;
-          font-weight: 500;
-          letter-spacing: .14em;
-          text-transform: uppercase;
-          color: rgba(255, 255, 255, .55);
-        }
-
-        .vx-eyebrow::before {
-          content: "";
-          width: 28px;
-          height: 1px;
-          background: rgba(255, 255, 255, .4);
-        }
-
-        .vx-h2 {
-          max-width: 760px;
-          font-family: "Reference Display", "Reference Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-          font-weight: 500;
-          font-size: clamp(34px, 4.6vw, 60px);
-          line-height: 1.06;
+        #h1 {
+          position: absolute;
+          top: 21.5vh;
+          left: var(--gut);
+          font-weight: 400;
+          font-size: clamp(34px, 4.65vw, 70px);
+          line-height: 1.03;
           letter-spacing: -0.035em;
-          color: #ffffff;
-          margin: 0;
+          white-space: nowrap;
+          color: var(--ink);
+        }
+        #h1 .hl {
+          color: var(--accent);
         }
 
-        .vx-dim {
-          color: rgba(211, 207, 207, .6);
+        .trust {
+          position: absolute;
+          top: 58vh;
+          left: var(--gut);
+          font-size: clamp(15px, 1.28vw, 19px);
+          letter-spacing: -0.015em;
+          color: var(--ink-2);
         }
 
-        .vx-lead {
-          max-width: 520px;
-          margin: 26px 0 0;
-          font-size: 17px;
-          line-height: 1.65;
-          font-weight: 350;
-          color: rgba(226, 229, 228, .72);
+        .hero-cta {
+          position: absolute;
+          bottom: 7.5vh;
+          left: var(--gut);
         }
 
-        /* About */
-        .vx-about-grid {
+        /* ── Logo Grid (4x2) ── */
+        .logos {
+          position: absolute;
+          right: 0;
+          width: 50%;
+          top: 55vh;
+          bottom: 0;
           display: grid;
-          grid-template-columns: 1.1fr 1fr;
-          gap: clamp(40px, 7vw, 120px);
-          align-items: start;
+          grid-template-columns: repeat(4, 1fr);
+          grid-template-rows: repeat(2, 1fr);
         }
-
-        .vx-values {
-          border-top: 1px solid rgba(255, 255, 255, .1);
-        }
-
-        .vx-value {
-          display: grid;
-          grid-template-columns: 120px 1fr;
-          gap: 20px;
-          padding: 28px 0;
-          border-bottom: 1px solid rgba(255, 255, 255, .1);
-        }
-
-        .vx-value h3 {
-          margin: 0;
-          font-size: 17px;
-          font-weight: 500;
-          color: #fff;
-        }
-
-        .vx-value p {
-          margin: 0;
-          font-size: 15px;
-          line-height: 1.65;
-          font-weight: 350;
-          color: rgba(226, 229, 228, .68);
-        }
-
-        /* Services */
-        .vx-services-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 18px;
-          margin-top: clamp(40px, 6vh, 64px);
-        }
-
-        .vx-card {
+        .logo-cell {
           position: relative;
-          height: 100%;
-          padding: 30px 30px 34px;
-          border-radius: 18px;
-          border: 1px solid rgba(255, 255, 255, .09);
-          background: linear-gradient(160deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015));
-          transition: border-color .3s ease, transform .3s ease, background .3s ease;
-        }
-
-        .vx-card:hover {
-          border-color: rgba(255, 255, 255, .22);
-          transform: translateY(-3px);
-          background: linear-gradient(160deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
-        }
-
-        .vx-card-num {
-          font-size: 13px;
-          font-weight: 500;
-          letter-spacing: .1em;
-          color: rgba(255, 255, 255, .4);
-        }
-
-        .vx-card h3 {
-          margin: 46px 0 10px;
-          font-size: 22px;
-          font-weight: 500;
-          letter-spacing: -0.02em;
-          color: #fff;
-        }
-
-        .vx-card p {
-          margin: 0;
-          max-width: 440px;
-          font-size: 15px;
-          line-height: 1.65;
-          font-weight: 350;
-          color: rgba(226, 229, 228, .68);
-        }
-
-        /* Contact */
-        .vx-contact-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: clamp(40px, 7vw, 120px);
-          align-items: start;
-        }
-
-        .vx-contact-mail {
-          display: inline-block;
-          margin-top: 34px;
-          padding-bottom: 4px;
-          font-size: 20px;
-          color: #fff;
-          border-bottom: 1px solid rgba(255, 255, 255, .35);
-          transition: border-color .2s;
-        }
-
-        .vx-contact-mail:hover {
-          border-color: #fff;
-        }
-
-        .vx-form {
-          padding: 30px;
-          border-radius: 18px;
-          border: 1px solid rgba(255, 255, 255, .09);
-          background: linear-gradient(160deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015));
           display: flex;
-          flex-direction: column;
-          gap: 18px;
-        }
-
-        .vx-field {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .vx-field label {
-          font-size: 13px;
-          font-weight: 450;
-          color: rgba(255, 255, 255, .6);
-        }
-
-        .vx-input {
-          width: 100%;
-          padding: 13px 14px;
-          border-radius: 10px;
-          border: 1px solid rgba(255, 255, 255, .12);
-          background: rgba(255, 255, 255, .04);
-          color: #fff;
-          font: inherit;
-          font-size: 15px;
-          outline: none;
-          transition: border-color .2s, background .2s, box-shadow .2s;
-        }
-
-        .vx-input::placeholder {
-          color: rgba(255, 255, 255, .34);
-        }
-
-        .vx-input:focus {
-          border-color: rgba(255, 255, 255, .45);
-          background: rgba(255, 255, 255, .06);
-          box-shadow: 0 0 0 3px rgba(255, 255, 255, .06);
-        }
-
-        textarea.vx-input {
-          min-height: 130px;
-          resize: vertical;
-        }
-
-        .vx-btn {
-          display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          height: 46px;
-          padding: 0 22px;
-          border: none;
-          border-radius: 7px;
-          background: #ffffff;
-          color: #101010;
-          font: inherit;
-          font-size: 15px;
-          font-weight: 500;
-          cursor: pointer;
-          box-shadow: 0 1px 5px rgba(0, 0, 0, .38);
-          transition: transform .2s ease, opacity .2s;
+          color: #3e4d68;
+        }
+        /* 1px left line on all cells */
+        .logo-cell::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 1px;
+          background: linear-gradient(to bottom, rgba(11,29,58,.08), rgba(11,29,58,.05));
+        }
+        /* 1px top line on row 2 (cells 5-8) */
+        .logo-cell.row-2::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          height: 1px;
+          background: rgba(11,29,58,.06);
         }
 
-        .vx-btn:hover {
-          transform: translateY(-1px);
-          opacity: .92;
+        .logo-item {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 13px;
+          font-weight: 600;
+          letter-spacing: .06em;
         }
 
-        .vx-sent {
+        /* Fade-up animations */
+        .fade-up {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+        body.ready .fade-up {
+          animation: fu .9s var(--ease) forwards;
+          animation-delay: var(--d);
+        }
+        @keyframes fu {
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* ── Statement (Pinned) ── */
+        .statement {
+          position: relative;
+          height: 306vh;
+          margin-top: -31vh;
+          pointer-events: none;
+        }
+        .pin {
+          position: sticky;
+          top: 0;
+          height: 100vh;
+        }
+        #stmt {
+          position: absolute;
+          top: 41.5vh;
+          left: 0;
+          right: 0;
+          text-align: center;
+          font-weight: 400;
+          font-size: clamp(20px, 2.8vw, 42px);
+          line-height: 1.16;
+          letter-spacing: -0.03em;
+          color: var(--ink);
+          white-space: nowrap;
+          will-change: transform;
+        }
+
+        /* ── Dark Split Panel ── */
+        .split {
+          position: relative;
+          z-index: 2;
+          background: var(--panel);
+          color: #ffffff;
+          min-height: 100vh;
+          display: grid;
+          grid-template-columns: 58.3% 41.7%;
+        }
+        .split .l {
+          position: relative;
+          padding-left: var(--gut);
           display: flex;
           flex-direction: column;
-          gap: 8px;
-          padding: 22px 4px;
+        }
+        .split .guide-line {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: var(--gut);
+          width: 1px;
+          background: var(--panel-line);
         }
 
-        .vx-sent strong {
-          font-size: 22px;
-          font-weight: 500;
-          letter-spacing: -0.02em;
+        #h2 {
+          font-weight: 400;
+          font-size: clamp(32px, 3.15vw, 48px);
+          line-height: 1.08;
+          letter-spacing: -0.03em;
+          padding: 21vh 0 0 6.2vw;
+          color: #ffffff;
         }
 
-        .vx-sent span {
-          font-size: 15px;
-          line-height: 1.6;
-          color: rgba(226, 229, 228, .7);
-        }
-
-        .vx-footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 16px;
-          flex-wrap: wrap;
-          margin-top: clamp(64px, 10vh, 110px);
-          padding-top: 28px;
-          border-top: 1px solid rgba(255, 255, 255, .1);
-          font-size: 13px;
-          color: rgba(255, 255, 255, .45);
-        }
-
-        .vx-footer a {
-          color: rgba(255, 255, 255, .7);
-          transition: color .2s;
-        }
-
-        .vx-footer a:hover {
-          color: #fff;
-        }
-
-        /* Reveal on scroll (only hidden once JS is running) */
-        .vx-js .vx-reveal {
+        #row {
+          margin-top: 6.4vh;
+          border-top: 1px solid var(--panel-line);
+          display: grid;
+          grid-template-columns: 1fr 1.05fr;
+          gap: 24px;
+          padding: 3vh 6vw 6vh 6.2vw;
           opacity: 0;
-          transform: translateY(18px);
-          transition: opacity .7s cubic-bezier(.2, .7, .2, 1), transform .7s cubic-bezier(.2, .7, .2, 1);
-          transition-delay: var(--d, 0ms);
+          transform: translateY(14px);
+          transition: opacity .9s var(--ease), transform .9s var(--ease);
         }
-
-        .vx-js .vx-reveal.is-visible {
+        #row.visible {
           opacity: 1;
-          transform: none;
+          transform: translateY(0);
         }
 
-        /* Responsive */
-        @media (max-width: 1100px) {
-          .vx-timezone {
-            display: none !important;
+        #row h3 {
+          font-weight: 400;
+          font-size: clamp(17px, 1.4vw, 21px);
+          color: #ffffff;
+        }
+        #row p {
+          font-size: clamp(13px, 1.1vw, 16px);
+          line-height: 1.38;
+          color: rgba(255, 255, 255, 0.5);
+          max-width: 20em;
+        }
+        #row p strong {
+          color: #ffffff;
+          font-weight: 500;
+        }
+
+        .split .r {
+          position: relative;
+          overflow: hidden;
+          width: 100%;
+          height: 100%;
+          min-height: 100vh;
+        }
+        #ship {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transform-origin: 50% 60%;
+          display: block;
+        }
+
+        /* ── Responsive (<= 820px) ── */
+        @media (max-width: 820px) {
+          .nav-links {
+            display: none;
           }
-        }
+          .nav {
+            height: 54px;
+            top: 12px;
+          }
+          .nav.on .navcta {
+            margin-left: 8px;
+          }
+          .nav-login {
+            padding: 0 6px;
+          }
 
-        @media (max-width: 900px) {
-          .vx-about-grid,
-          .vx-contact-grid {
+          #h1 {
+            top: 17vh;
+            font-size: 7.4vw;
+            white-space: normal;
+          }
+          .trust {
+            top: 44vh;
+          }
+          .logos {
+            width: 100%;
+            top: 50vh;
+            bottom: 18vh;
+          }
+          .logo-item span {
+            display: none;
+          }
+          .hero-cta {
+            bottom: 6vh;
+          }
+
+          #stmt {
+            white-space: normal;
+            font-size: 23px;
+            max-width: 15em;
+            margin: 0 auto;
+          }
+          #stmt br {
+            display: none;
+          }
+
+          .split {
             grid-template-columns: 1fr;
+            grid-template-rows: auto 70vh;
+          }
+          .split .r {
+            min-height: 70vh;
+          }
+          #h2 {
+            padding: 16vh 0 0 6vw;
+          }
+          #row {
+            grid-template-columns: 1fr;
+            padding: 3vh 6vw 6vh;
           }
         }
+      `,
+        }}
+      />
 
-        @media (max-width: 640px) {
-          .vx-services-grid {
-            grid-template-columns: 1fr;
-          }
-          .vx-value {
-            grid-template-columns: 1fr;
-            gap: 8px;
-          }
-        }
-      `}</style>
+      {/* ── Fixed Atmosphere (Canvas Bowl Glow) ── */}
+      <div className="atmo">
+        <canvas id="bg" width="96" height="60" />
+      </div>
 
-            {/* ── FIXED HEADER ── */}
-            <div className={`vx-header-bg ${scrolled ? "on" : ""}`} />
-            <header className="vx-header">
-                <Link
-                    href="/"
-                    aria-label="Vantage home"
-                    style={{
-                        position: "relative",
-                        top: "10px",
-                        display: "inline-block",
-                        width: "25px",
-                        height: "25px",
-                        filter: "drop-shadow(0 1px 2px rgba(0,0,0,.3))",
-                        textDecoration: "none",
-                        flexShrink: 0,
-                    }}
-                >
-                    <svg viewBox="0 0 25 25" fill="none" style={{ width: 25, height: 25, display: "block" }}>
-                        <clipPath id="brand-disc-tsx"><circle cx="12.5" cy="12.5" r="12.5" /></clipPath>
-                        <g clipPath="url(#brand-disc-tsx)">
-                            <rect width="25" height="25" fill="#ededed" />
-                            <path d="M12.5 0 L25 12.5 L12.5 25 Z" fill="#050606" />
-                            <path d="M0 12.5 L12.5 0 L12.5 12.5 Z" fill="#737778" />
-                            <path d="M12.5 12.5 L25 12.5 L12.5 25 Z" fill="#fafafa" opacity="0.85" />
-                            <path d="M0 12.5 L12.5 12.5 L6.25 25 Z" fill="#0a0b0b" />
-                            <polygon points="12.5,4 18,12.5 12.5,21 7,12.5" fill="#ffffff" />
-                            <polygon points="12.5,7 15.5,12.5 12.5,18 9.5,12.5" fill="#0a0b0b" />
-                        </g>
-                    </svg>
-                </Link>
+      {/* ── Fixed Pill Navbar ── */}
+      <header className="nav" id="nav">
+        <Link href="/" className="brand">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="11" cy="11" r="11" fill="#5b7cf0" />
+            <path
+              d="M5 10.2c2.3-1.6 4.7-1.6 7 0s4.7 1.6 7 0"
+              stroke="#ffffff"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+            <path
+              d="M5 14.2c2.3-1.6 4.7-1.6 7 0s4.7 1.6 7 0"
+              stroke="#ffffff"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="brand-name">Halden</span>
+        </Link>
 
-                <div style={{ display: "flex", alignItems: "flex-start", width: "100%" }}>
-                    <nav
-                        style={{
-                            marginLeft: "clamp(36px, 3.03vw, 48px)",
-                            gap: "clamp(28px, 2.9vw, 43px)",
-                            position: "relative",
-                            top: "7px",
-                            display: "flex",
-                        }}
-                    >
-                        {navLinks.map((link) => {
-                            const isActive = active === link.id;
-                            const underline = (
-                                <span
-                                    style={{
-                                        position: "absolute",
-                                        bottom: "-8px",
-                                        left: 0,
-                                        right: 0,
-                                        height: "2px",
-                                        background: "rgba(255,255,255,.82)",
-                                        borderRadius: "1px",
-                                        opacity: isActive ? 1 : 0,
-                                        transform: isActive ? "scaleX(1)" : "scaleX(.4)",
-                                        transformOrigin: "left center",
-                                        transition: "opacity .25s, transform .25s",
-                                    }}
-                                />
-                            );
-                            return link.href.startsWith("#") ? (
-                                <a key={link.id} href={link.href} className="vx-nav-link" style={navLinkStyle(isActive)}>
-                                    {link.label}
-                                    {underline}
-                                </a>
-                            ) : (
-                                <Link key={link.id} href={link.href} className="vx-nav-link" style={navLinkStyle(isActive)}>
-                                    {link.label}
-                                    {underline}
-                                </Link>
-                            );
-                        })}
-                    </nav>
+        <nav className="nav-links">
+          <a href="#platform" className="nav-link">
+            Platform
+          </a>
+          <a href="#solutions" className="nav-link">
+            Solutions
+          </a>
+          <a href="#security" className="nav-link">
+            Security
+          </a>
+          <a href="#company" className="nav-link">
+            Company
+          </a>
+          <a href="#resources" className="nav-link">
+            Resources
+          </a>
+        </nav>
 
-                    <div
-                        className="vx-timezone"
-                        style={{
-                            marginLeft: "auto",
-                            width: "211px",
-                            height: "48px",
-                            paddingLeft: "8px",
-                            borderLeft: "2px solid rgba(230,230,230,.52)",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                            userSelect: "none",
-                        }}
-                    >
-            <span style={{ fontSize: "15px", fontWeight: 420, color: "rgba(240,240,240,.77)", lineHeight: 1.2 }}>
-              Timezone
-            </span>
-                        <span style={{ fontSize: "15px", fontWeight: 440, color: "rgba(255,255,255,.93)", lineHeight: 1.2, whiteSpace: "nowrap" }}>
-              9:47 PM&nbsp; • &nbsp;14 July 2026
-            </span>
-                    </div>
-
-                    <Link
-                        href="/login"
-                        style={{
-                            width: "109px",
-                            height: "42px",
-                            borderRadius: "7px",
-                            background: "#ffffff",
-                            color: "#101010",
-                            fontWeight: 460,
-                            letterSpacing: "-.34px",
-                            border: "none",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "16px",
-                            boxShadow: "inset 0 1px 0 rgba(255,255,255,.72), 0 1px 5px rgba(0,0,0,.34)",
-                            marginLeft: "clamp(20px, 1.95vw, 29px)",
-                            textDecoration: "none",
-                            flexShrink: 0,
-                        }}
-                    >
-                        Sign In
-                    </Link>
-                </div>
-            </header>
-
-            <main>
-                {/* ════════════ HERO ════════════ */}
-                <section id="home" className="screen-container">
-                    {/* Background Video */}
-                    <video
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        disablePictureInPicture
-                        aria-hidden="true"
-                        style={{
-                            position: "absolute",
-                            inset: 0,
-                            zIndex: -3,
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            objectPosition: "center",
-                            pointerEvents: "none",
-                            userSelect: "none",
-                        }}
-                    >
-                        <source
-                            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260808_064556_051587f1-74a1-4336-8c05-4dde3594ed05.mp4"
-                            type="video/mp4"
-                        />
-                    </video>
-
-                    {/* Screen Vignette Overlay */}
-                    <div
-                        className="vignette-overlay"
-                        style={{
-                            position: "absolute",
-                            inset: 0,
-                            zIndex: -2,
-                            pointerEvents: "none",
-                        }}
-                    />
-
-                    {/* ── CENTER ALIGNED CHATBOX ── */}
-                    <div
-                        style={{
-                            position: "absolute",
-                            left: 0,
-                            right: 0,
-                            top: "calc(50% - 24px)",
-                            zIndex: 20,
-                            display: "flex",
-                            justifyContent: "center",
-                            padding: "0 16px",
-                            pointerEvents: "none", // empty space around the box stays click-through
-                        }}
-                    >
-                        <div style={{ width: "100%", maxWidth: 480, pointerEvents: "auto" }}>
-                            <PromptInput
-                                placeholder="Ask anything"
-                                onSubmit={(query, meta) => {
-                                    // UI-only for now: model and effort selectors are visual
-                                    alert(`Prompt submitted: "${query}" with model ${meta.model} (${meta.effort})`);
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    {/* ── HERO CONTENT (Bottom-Left) ── */}
-                    <section
-                        style={{
-                            position: "absolute",
-                            left: "var(--gutter-start)",
-                            bottom: "var(--hero-bottom)",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-start",
-                            zIndex: 5,
-                            userSelect: "none",
-                        }}
-                    >
-                        <h1
-                            className="hero-title-font"
-                            style={{
-                                fontSize: "var(--display-size)",
-                                lineHeight: "var(--display-leading)",
-                                margin: 0,
-                                marginBottom: "var(--title-copy-gap)",
-                            }}
-                        >
-              <span style={{ display: "block", overflow: "hidden" }}>
-                <span className="line-one-transform" style={{ display: "block" }}>
-                  Stop Digging
-                </span>
+        <div className="nav-right">
+          <Link href="/login" className="nav-login">
+            Login
+          </Link>
+          <div className="navcta">
+            <Link href="/login" className="btn">
+              <span className="lbl">Get a demo</span>
+              <span className="dot">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M4.5 2.5 8 6l-3.5 3.5"
+                    stroke="#0b1d3a"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </span>
-                            <span style={{ display: "block", overflow: "hidden" }}>
-                <span className="line-two-transform" style={{ display: "block" }}>
-                  Through Dashboards.
-                </span>
-              </span>
-                        </h1>
-
-                        <p
-                            style={{
-                                fontSize: "var(--copy-size)",
-                                lineHeight: "var(--copy-leading)",
-                                position: "relative",
-                                left: "1px",
-                                width: "clamp(390px, 31.67vw, 500px)",
-                                color: "rgba(226, 229, 228, .84)",
-                                fontWeight: 350,
-                                letterSpacing: ".13px",
-                                textShadow: "0 1px 3px rgba(0,0,0,.7)",
-                                margin: "0 0 var(--copy-cta-gap) 0",
-                            }}
-                        >
-                            Your metrics are scattered across a dozen dashboards.<br />
-                            Vantage bring them into one clear signal, so every<br />
-                            decision is backed by data you actually trust.
-                        </p>
-
-                        <Link
-                            href="/app"
-                            style={{
-                                position: "relative",
-                                width: "var(--cta-width)",
-                                height: "var(--cta-height)",
-                                borderRadius: "7px",
-                                background: "#ffffff",
-                                color: "#111111",
-                                border: "none",
-                                cursor: "pointer",
-                                boxShadow: "0 1px 5px rgba(0,0,0,.38)",
-                                fontSize: "var(--primary-control-font-size)",
-                                fontFamily: "inherit",
-                                overflow: "hidden",
-                                display: "inline-block",
-                                textDecoration: "none",
-                            }}
-                        >
-              <span
-                  style={{
-                      position: "absolute",
-                      left: "8.125%",
-                      top: "50%",
-                      transform: "translateY(calc(-50% + var(--control-baseline-shift)))",
-                      fontWeight: 450,
-                      letterSpacing: "-.3px",
-                      whiteSpace: "nowrap",
-                  }}
-              >
-                Get Started
-              </span>
-                            <div
-                                style={{
-                                    position: "absolute",
-                                    right: "3.125%",
-                                    top: "14.286%",
-                                    width: "20.625%",
-                                    height: "71.429%",
-                                    borderRadius: "7px",
-                                    background: "#070909",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                }}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    <polyline points="12 5 19 12 12 19"></polyline>
-                                </svg>
-                            </div>
-                        </Link>
-                    </section>
-
-                    {/* ── GLASS DEMO CARD (Bottom-Right) ── */}
-                    <article
-                        style={{
-                            position: "absolute",
-                            right: "var(--gutter-end)",
-                            bottom: "var(--hero-bottom)",
-                            width: "var(--card-width)",
-                            aspectRatio: "201 / 265",
-                            containerType: "inline-size",
-                            border: "1px solid rgba(255,255,255,.13)",
-                            borderRadius: "clamp(12px, 1.52vh, 18px)",
-                            background: "linear-gradient(145deg, rgba(24,22,20,.80), rgba(5,12,14,.86))",
-                            boxShadow: "0 2px 10px rgba(0,0,0,.44), 0 0 0 3px rgba(255,255,255,.035) inset, 0 0 0 1px rgba(0,0,0,.9)",
-                            backdropFilter: "blur(14px) saturate(108%)",
-                            WebkitBackdropFilter: "blur(14px) saturate(108%)",
-                            zIndex: 5,
-                            boxSizing: "border-box",
-                            overflow: "hidden",
-                            userSelect: "none",
-                        }}
-                    >
-                        <div
-                            style={{
-                                position: "absolute",
-                                left: "3.5cqw",
-                                top: "4cqw",
-                                width: "92.5cqw",
-                                height: "92cqw",
-                                borderRadius: "4cqw",
-                                background: "#101a1e",
-                                overflow: "hidden",
-                            }}
-                        >
-                            <img
-                                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ec4899'/%3E%3Cstop offset='60%25' stop-color='%236366f1'/%3E%3Cstop offset='100%25' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3Cfilter id='blur'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.015' numOctaves='3' result='noise'/%3E%3CfeDisplacementMap in='SourceGraphic' in2='noise' scale='45' xChannelSelector='R' yChannelSelector='G'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23090d12'/%3E%3Ccircle cx='180' cy='190' r='140' fill='url(%23g)' filter='url(%23blur)' opacity='0.9'/%3E%3C/svg%3E"
-                                alt="Abstract red and blue smoke"
-                                style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                    filter: "brightness(.89) saturate(.93) contrast(1.03)",
-                                    display: "block",
-                                }}
-                            />
-                            <button
-                                type="button"
-                                aria-label="Play demo"
-                                style={{
-                                    position: "absolute",
-                                    left: "50%",
-                                    top: "50%",
-                                    transform: "translate(-50%, -50%)",
-                                    width: "29cqw",
-                                    height: "29cqw",
-                                    borderRadius: "50%",
-                                    border: "1px solid rgba(255,255,255,.34)",
-                                    background: "rgba(3,5,7,.47)",
-                                    backdropFilter: "blur(4px)",
-                                    WebkitBackdropFilter: "blur(4px)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    cursor: "pointer",
-                                    padding: 0,
-                                    color: "#ffffff",
-                                }}
-                            >
-                                <svg width="40%" height="40%" viewBox="0 0 24 24" fill="#ffffff" style={{ marginLeft: "2px" }}>
-                                    <polygon points="6 4 20 12 6 20 6 4"></polygon>
-                                </svg>
-                            </button>
-                        </div>
-
-                        <button
-                            type="button"
-                            style={{
-                                position: "absolute",
-                                left: "3.5cqw",
-                                bottom: "4cqw",
-                                width: "92.5cqw",
-                                height: "18.5cqw",
-                                borderRadius: "4cqw",
-                                background: "linear-gradient(145deg, rgba(26,34,36,.86), rgba(16,29,33,.9))",
-                                border: "1px solid rgba(255,255,255,.21)",
-                                color: "#ffffff",
-                                fontWeight: 430,
-                                fontSize: "clamp(11px, 7.5cqw, 15px)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Watch Demo
-                        </button>
-                    </article>
-                </section>
-
-                {/* ════════════ ABOUT ════════════ */}
-                <section id="about" className="vx-section">
-                    <div className="vx-container">
-                        <div className="vx-about-grid">
-                            <div className="vx-reveal">
-                                <span className="vx-eyebrow">About</span>
-                                <h2 className="vx-h2">
-                                    One clear signal, <span className="vx-dim">not a dozen dashboards.</span>
-                                </h2>
-                                <p className="vx-lead">
-                                    Vantage connects the tools your team already uses and turns scattered metrics into a single,
-                                    trustworthy view. Less tab-hopping, fewer arguments about whose number is right, and more time
-                                    spent acting on what the data says.
-                                </p>
-                            </div>
-
-                            <div className="vx-values">
-                                {values.map((v, i) => (
-                                    <div key={v.title} className="vx-value vx-reveal" style={delay(i * 90)}>
-                                        <h3>{v.title}</h3>
-                                        <p>{v.text}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* ════════════ SERVICES ════════════ */}
-                <section id="services" className="vx-section alt">
-                    <div className="vx-container">
-                        <div className="vx-reveal">
-                            <span className="vx-eyebrow">Services</span>
-                            <h2 className="vx-h2">
-                                Everything you need to <span className="vx-dim">trust your numbers.</span>
-                            </h2>
-                        </div>
-
-                        <div className="vx-services-grid">
-                            {services.map((s, i) => (
-                                <div key={s.num} className="vx-reveal" style={delay((i % 2) * 90)}>
-                                    <article className="vx-card">
-                                        <span className="vx-card-num">{s.num}</span>
-                                        <h3>{s.title}</h3>
-                                        <p>{s.text}</p>
-                                    </article>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                {/* ════════════ CONTACT ════════════ */}
-                <section id="contact" className="vx-section">
-                    <div className="vx-container">
-                        <div className="vx-contact-grid">
-                            <div className="vx-reveal">
-                                <span className="vx-eyebrow">Contact</span>
-                                <h2 className="vx-h2">
-                                    Let&apos;s make your data <span className="vx-dim">speak clearly.</span>
-                                </h2>
-                                <p className="vx-lead">
-                                    Tell us about your setup and what you would like to see. We will get back to you with next steps.
-                                </p>
-                                <a className="vx-contact-mail" href="mailto:hello@example.com">
-                                    hello@example.com
-                                </a>
-                            </div>
-
-                            <div className="vx-reveal" style={delay(100)}>
-                                {sent ? (
-                                    <div className="vx-form">
-                                        <div className="vx-sent" role="status">
-                                            <strong>Thanks, message received.</strong>
-                                            <span>We will be in touch soon.</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <form className="vx-form" onSubmit={handleContactSubmit}>
-                                        <div className="vx-field">
-                                            <label htmlFor="contact-name">Name</label>
-                                            <input id="contact-name" name="name" className="vx-input" type="text" placeholder="Your name" required />
-                                        </div>
-                                        <div className="vx-field">
-                                            <label htmlFor="contact-email">Email</label>
-                                            <input id="contact-email" name="email" className="vx-input" type="email" placeholder="you@company.com" required />
-                                        </div>
-                                        <div className="vx-field">
-                                            <label htmlFor="contact-message">Message</label>
-                                            <textarea id="contact-message" name="message" className="vx-input" placeholder="What are you trying to solve?" required />
-                                        </div>
-                                        <button type="submit" className="vx-btn">
-                                            Send message
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                                <line x1="5" y1="12" x2="19" y2="12" />
-                                                <polyline points="12 5 19 12 12 19" />
-                                            </svg>
-                                        </button>
-                                    </form>
-                                )}
-                            </div>
-                        </div>
-
-                        <footer className="vx-footer">
-                            <span>© {new Date().getFullYear()} Vantage. All rights reserved.</span>
-                            <a href="#home">Back to top ↑</a>
-                        </footer>
-                    </div>
-                </section>
-            </main>
+            </Link>
+          </div>
         </div>
-    );
+      </header>
+
+      <main>
+        {/* ── 1. Hero ── */}
+        <section className="hero" id="hero">
+          <h1 id="h1">
+            Meet <span className="hl">Hal</span>, your AI teammate
+            <br />
+            for port operators
+          </h1>
+
+          <p className="trust fade-up" style={{ "--d": "1.15s" } as React.CSSProperties}>
+            Port operators trust Halden
+          </p>
+
+          <div className="hero-cta fade-up" style={{ "--d": "1.3s" } as React.CSSProperties}>
+            <Link href="/login" className="btn lg">
+              Get a demo
+              <span className="dot">
+                <svg width="16" height="16" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M4.5 2.5 8 6l-3.5 3.5"
+                    stroke="#0b1d3a"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </Link>
+          </div>
+
+          {/* 4x2 Logo Grid */}
+          <div className="logos">
+            {/* Cell 1: OCEANEX */}
+            <div className="logo-cell fade-up" style={{ "--d": "1.25s" } as React.CSSProperties}>
+              <div className="logo-item">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="M2 7.5c2.5-2 5.5-2 8 0s5.5 2 8 0"
+                    stroke="#3e4d68"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M2 13c2.5-2 5.5-2 8 0s5.5 2 8 0"
+                    stroke="#3e4d68"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span>OCEANEX</span>
+              </div>
+            </div>
+
+            {/* Cell 2: Nordhavn */}
+            <div className="logo-cell fade-up" style={{ "--d": "1.32s" } as React.CSSProperties}>
+              <div
+                className="logo-item"
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontWeight: "bold",
+                  fontStyle: "italic",
+                  fontSize: "15px",
+                  letterSpacing: "0.02em",
+                }}
+              >
+                <span>Nordhavn</span>
+              </div>
+            </div>
+
+            {/* Cell 3: BLUEGATE */}
+            <div className="logo-cell fade-up" style={{ "--d": "1.39s" } as React.CSSProperties}>
+              <div className="logo-item">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <rect x="2" y="10" width="3.5" height="10" fill="#3e4d68" rx="0.8" />
+                  <rect x="8" y="5" width="3.5" height="15" fill="#3e4d68" rx="0.8" />
+                  <rect x="14" y="8" width="3.5" height="12" fill="#3e4d68" rx="0.8" />
+                </svg>
+                <span>BLUEGATE</span>
+              </div>
+            </div>
+
+            {/* Cell 4: KELPWAY */}
+            <div className="logo-cell fade-up" style={{ "--d": "1.46s" } as React.CSSProperties}>
+              <div className="logo-item" style={{ fontSize: "11px", fontWeight: 500, letterSpacing: ".32em" }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <polygon points="10,2 18,18 2,18" stroke="#3e4d68" strokeWidth="2" strokeLinejoin="round" />
+                </svg>
+                <span>KELPWAY</span>
+              </div>
+            </div>
+
+            {/* Cell 5: TIDELINE */}
+            <div className="logo-cell row-2 fade-up" style={{ "--d": "1.42s" } as React.CSSProperties}>
+              <div
+                className="logo-item"
+                style={{
+                  fontSize: "16px",
+                  fontWeight: 800,
+                  letterSpacing: "-0.02em",
+                  border: "2px solid #3e4d68",
+                  borderRadius: "4px",
+                  padding: "2px 7px",
+                }}
+              >
+                <span>TIDELINE</span>
+              </div>
+            </div>
+
+            {/* Cell 6: HARBORIX */}
+            <div className="logo-cell row-2 fade-up" style={{ "--d": "1.49s" } as React.CSSProperties}>
+              <div className="logo-item">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M4 2v16M16 2v16M4 10h12" stroke="#3e4d68" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                <span>HARBORIX</span>
+              </div>
+            </div>
+
+            {/* Cell 7: seaflux */}
+            <div className="logo-cell row-2 fade-up" style={{ "--d": "1.56s" } as React.CSSProperties}>
+              <div className="logo-item" style={{ fontSize: "15px", fontWeight: 500, textTransform: "lowercase" }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="7.5" stroke="#3e4d68" strokeWidth="2" />
+                  <circle cx="10" cy="10" r="2.2" fill="#3e4d68" />
+                </svg>
+                <span>seaflux</span>
+              </div>
+            </div>
+
+            {/* Cell 8: PORTERRA */}
+            <div className="logo-cell row-2 fade-up" style={{ "--d": "1.63s" } as React.CSSProperties}>
+              <div className="logo-item" style={{ fontSize: "11px", letterSpacing: ".24em" }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <polygon points="10,3 19,17 1,17" fill="#3e4d68" />
+                </svg>
+                <span>PORTERRA</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── 2. Statement (Pinned) ── */}
+        <section className="statement" id="statement">
+          <div className="pin">
+            <p id="stmt">
+              Hal is an AI teammate
+              <br />
+              that tracks vessels, books berths, files customs,
+              <br />
+              coordinates crews, escalates and does anything
+              <br />
+              in between to keep a port moving
+            </p>
+          </div>
+        </section>
+
+        {/* ── 3. Dark Split ── */}
+        <section className="split" id="split">
+          <div className="l">
+            <div className="guide-line" />
+            <h2 id="h2">
+              AI teammate that operates
+              <br />
+              like you work
+            </h2>
+
+            <div id="row">
+              <h3>Port operators</h3>
+              <p>
+                <strong>Berth faster. Clear more. Stop chasing manifests.</strong> Hal runs
+                scheduling, bookings, customs filings, and more — so your team stays focused on
+                throughput and safety.
+              </p>
+            </div>
+          </div>
+
+          <div className="r">
+            <img
+              id="ship"
+              src="https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261029_050506_a830ff21-4c71-4272-bc39-b61cacb54463.png&w=1400&q=85"
+              alt="Aerial view of a container ship sailing up a misty fjord"
+            />
+          </div>
+        </section>
+      </main>
+    </>
+  );
 }
