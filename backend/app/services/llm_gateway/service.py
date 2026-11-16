@@ -106,7 +106,7 @@ class LLMGateway:
 
         # 3. Local Ollama with resilient multi-tier fallback
         if "ollama" in selected_provider or "local" in selected_provider:
-            target_model = model or settings.default_model or "gemma2:2b"
+            target_model = model or settings.default_model or "qwen2.5:3b"
             ollama_error = None
             try:
                 async for token in self._stream_ollama(system_prompt, user_prompt, target_model, effort=effort):
@@ -120,10 +120,10 @@ class LLMGateway:
             installed = await self.get_installed_ollama_models()
             alt_model = None
             if installed:
-                # Priority: qwen2.5:1.5b, or any other qwen, or any llama/mistral, or first available
+                # Priority: qwen2.5:3b, qwen2.5:1.5b, any qwen, or any other installed model
                 candidates = [
                     m for m in installed
-                    if m != target_model and any(k in m.lower() for k in ["qwen2.5:1.5b", "qwen", "llama", "mistral", "gemma", "phi"])
+                    if m != target_model and any(k in m.lower() for k in ["qwen2.5:3b", "qwen2.5:1.5b", "qwen2.5", "qwen", "gemma2", "llama"])
                 ]
                 alt_model = candidates[0] if candidates else (installed[0] if installed[0] != target_model else None)
 
@@ -394,18 +394,24 @@ class LLMGateway:
         eff = (effort or "medium").lower()
         if "low" in eff:
             temp = 0.0
-            num_predict = 512
-            num_ctx = 4096
+            num_predict = 400
+            num_ctx = 1536
         elif "max" in eff or "high" in eff or "deep" in eff:
             temp = 0.05
-            num_predict = 2048
-            num_ctx = 8192
+            num_predict = 1024
+            num_ctx = 3072
         else:
             temp = 0.0
-            num_predict = 1200
-            num_ctx = 4096
 
-        threads = min(os.cpu_count() or 4, 8)
+            num_predict = 800
+            num_ctx = 2048
+
+        # Apple Silicon / M-series CPU optimization:
+        # Never utilize 100% of CPU cores (which starves macOS WindowServer and causes system freezes/hangs).
+        # Cap worker threads at 4 (leaving efficiency and OS cores completely free).
+        cpu_cores = os.cpu_count() or 4
+        threads = max(2, min(cpu_cores // 2, 4))
+
         url = f"{self.ollama_base_url}/api/chat"
         payload = {
             "model": model,
@@ -421,6 +427,7 @@ class LLMGateway:
                 "top_k": 20,
                 "top_p": 0.85,
                 "repeat_penalty": 1.15,
+                "f16_kv": True,
                 "stop": [
                     "<end_of_turn>",
                     "<eos>",
@@ -430,7 +437,7 @@ class LLMGateway:
                     "--- PASSAGE",
                 ],
             },
-            "keep_alive": -1,
+            "keep_alive": "10m",
             "stream": True,
         }
 

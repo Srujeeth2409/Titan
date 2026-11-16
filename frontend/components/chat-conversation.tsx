@@ -372,7 +372,7 @@ export function ChatConversation({
   const queryCol = searchParams.get("collection");
 
   const [inputQuery, setInputQuery] = useState("");
-  const [selectedModel, setSelectedModel] = useState("Ollama (Local 2.2B)");
+  const [selectedModel, setSelectedModel] = useState("Qwen 2.5 (Local 3B)");
   const [selectedEffort, setSelectedEffort] = useState("Medium");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"Fast" | "Medium" | "Deep">("Medium");
@@ -410,7 +410,8 @@ export function ChatConversation({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const models = [
-    { id: "gemma2:2b", name: "Ollama (Local 2.2B)", tier: "Local 2.2B", provider: "ollama" },
+    { id: "qwen2.5:3b", name: "Qwen 2.5 (Local 3B)", tier: "Qwen 2.5 (3B)", provider: "ollama" },
+    { id: "qwen2.5:1.5b", name: "Qwen 2.5 (Local 1.5B)", tier: "Qwen 2.5 (1.5B)", provider: "ollama" },
   ];
 
   const modes = [

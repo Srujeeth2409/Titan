@@ -11,17 +11,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const TOKEN_KEY = "titan_access_token";
 
 /**
- * Returns true when running in a cloud deployment (Vercel/etc.) where
- * the local Docker backend at localhost:8000 is unreachable.
+ * Cloud deployment check disabled: all requests route directly
+ * to the local Titan backend (Docker/FastAPI at localhost:8000).
  */
 function isCloudDeployment(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return (
-    host.includes("vercel.app") ||
-    host.includes("netlify.app") ||
-    (!host.includes("localhost") && !host.includes("127.0.0.1") && !host.includes("192.168."))
-  );
+  return false;
 }
 
 export function getStoredToken(): string | null {

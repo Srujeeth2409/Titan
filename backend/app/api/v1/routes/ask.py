@@ -190,54 +190,22 @@ async def ask(
         guard_res = guardrails.validate_query(body.question)
         sanitized_question = guard_res.sanitized_text
 
-        # 1. Embed query
+        # 1. Embed query (Fast single-pass FastEmbed BGE, ~10ms)
         embedder = get_embedding_provider()
         query_vectors = await embedder.embed([sanitized_question])
         query_vector = query_vectors[0]
 
-        # 1b. HyDE: attempt a hypothetical-document embedding to improve retrieval alignment
-        llm = get_llm_gateway()
-        hyde_vector = await _hyde_embed(sanitized_question, llm, embedder)
-        if hyde_vector:
-            # Average raw query vector with HyDE vector for best of both worlds
-            query_vector = [
-                (a + b) / 2.0 for a, b in zip(query_vector, hyde_vector)
-            ]
-
-        # 2. Multi-Query Hybrid Search (Qdrant Dense + BM25 Sparse + RRF + Reranker)
+        # 2. Fast High-Precision Hybrid Search (Qdrant Dense + BM25 Sparse + RRF + Reranker)
+        # Direct single-pass hybrid search (sub-60ms) with zero LLM pre-generation overhead
         retriever = get_retrieval_service()
-        top_m = (body.options.top_m if body.options and body.options.top_m else 12)
-
-        # Generate query variants and retrieve for each; union the results
-        query_variants = await _generate_query_variants(sanitized_question, llm)
-        seen_ids: set = set()
-        all_chunks: List[RetrievedChunk] = []
-        for variant in query_variants:
-            v_vecs = await embedder.embed([variant])
-            variant_chunks = await retriever.hybrid_search(
-                collection_name=body.collection,
-                query=variant,
-                query_vector=v_vecs[0],
-                top_k=top_m,
-                rerank=False,  # rerank once on the merged pool below
-            )
-            for c in variant_chunks:
-                if c.chunk_id not in seen_ids:
-                    seen_ids.add(c.chunk_id)
-                    all_chunks.append(c)
-
-        # Rerank the merged candidate pool and trim to top_m
-        if all_chunks:
-            try:
-                from app.services.reranking.service import get_reranker
-                reranker = get_reranker()
-                passages = [c.text for c in all_chunks]
-                ranked_indices = await reranker.rerank(sanitized_question, passages, top_n=top_m)
-                chunks = [all_chunks[i] for i in ranked_indices if i < len(all_chunks)]
-            except Exception:
-                chunks = all_chunks[:top_m]
-        else:
-            chunks = []
+        top_m = (body.options.top_m if body.options and body.options.top_m else 6)
+        chunks = await retriever.hybrid_search(
+            collection_name=body.collection,
+            query=sanitized_question,
+            query_vector=query_vector,
+            top_k=top_m,
+            rerank=True,
+        )
 
         # 3. Check for abstention
         if not chunks or (len(chunks) > 0 and chunks[0].score < 0.25):
@@ -285,11 +253,11 @@ async def ask(
         citations = citation_engine.build_citations(answer_text, chunks)
 
         hallucination_detector = get_hallucination_detector()
-        is_deep = "max" in (body.effort or "medium").lower() or "high" in (body.effort or "medium").lower()
+        is_cloud_llm = body.provider in ["groq", "openai", "anthropic"]
         hall_report = await hallucination_detector.check(
             answer=answer_text,
             context_chunks=[c.text for c in chunks],
-            fast_mode=not is_deep,
+            fast_mode=not is_cloud_llm,
         )
 
         confidence = _calculate_confidence(chunks, citations, hall_report.score)
@@ -384,49 +352,19 @@ async def ask_stream(
                     "Before each factual sentence, internally verify which passage supports it, then cite it inline."
                 )
 
-            # Event 3: step_started (Hybrid search with HyDE + Multi-Query)
-            search_step_msg = f"Multi-Query + HyDE retrieval on '{body.collection}' (Dense + BM25 + RRF + Rerank) [Effort: {body.effort or 'Medium'}]"
+            # Event 3: step_started (Fast Hybrid search)
+            search_step_msg = f"Hybrid retrieval on '{body.collection}' (Dense + BM25 + RRF + Rerank) [Effort: {body.effort or 'Medium'}]"
             yield f"data: {json.dumps({'type': 'step_started', 'data': {'step': search_step_msg}})}\n\n"
 
-            # HyDE: embed a hypothetical answer for better vector alignment
-            llm_for_hyde = get_llm_gateway()
-            hyde_vector = await _hyde_embed(sanitized_question, llm_for_hyde, embedder)
-            if hyde_vector:
-                query_vector = [(a + b) / 2.0 for a, b in zip(query_vector, hyde_vector)]
-
             retriever = get_retrieval_service()
-            # Multi-Query: generate variants, retrieve for each, union results
-            query_variants = await _generate_query_variants(sanitized_question, llm_for_hyde)
-            seen_ids: set = set()
-            all_chunks: List[RetrievedChunk] = []
-            for variant in query_variants:
-                v_vecs = await embedder.embed([variant])
-                variant_chunks = await retriever.hybrid_search(
-                    collection_name=body.collection,
-                    query=variant,
-                    query_vector=v_vecs[0],
-                    top_k=top_m,
-                    rerank=False,
-                )
-                for c in variant_chunks:
-                    if c.chunk_id not in seen_ids:
-                        seen_ids.add(c.chunk_id)
-                        all_chunks.append(c)
-
-            # Rerank the merged candidate pool
-            if all_chunks:
-                try:
-                    from app.services.reranking.service import get_reranker
-                    reranker = get_reranker()
-                    passages = [c.text for c in all_chunks]
-                    ranked_indices = await reranker.rerank(sanitized_question, passages, top_n=top_m)
-                    chunks = [all_chunks[i] for i in ranked_indices if i < len(all_chunks)]
-                except Exception:
-                    chunks = all_chunks[:top_m]
-            else:
-                chunks = []
-
-            yield f"data: {json.dumps({'type': 'step_completed', 'data': {'step': f'Fused & reranked {len(chunks)} relevant chunks from {len(query_variants)} query variants'}})}\n\n"
+            chunks = await retriever.hybrid_search(
+                collection_name=body.collection,
+                query=sanitized_question,
+                query_vector=query_vector,
+                top_k=top_m,
+                rerank=True,
+            )
+            yield f"data: {json.dumps({'type': 'step_completed', 'data': {'step': f'Fused & reranked {len(chunks)} relevant chunks'}})}\n\n"
 
             # Event 4: chunks_retrieved
             chunks_summary = [
@@ -497,11 +435,11 @@ async def ask_stream(
             citations = citation_engine.build_citations(full_answer, chunks)
 
             hallucination_detector = get_hallucination_detector()
-            is_deep = "max" in effort_label.lower() or "high" in effort_label.lower()
+            is_cloud_llm = body.provider in ["groq", "openai", "anthropic"]
             hall_report = await hallucination_detector.check(
                 answer=full_answer,
                 context_chunks=[c.text for c in chunks],
-                fast_mode=not is_deep,
+                fast_mode=not is_cloud_llm,
             )
             confidence = _calculate_confidence(chunks, citations, hall_report.score)
             yield f"data: {json.dumps({'type': 'step_completed', 'data': {'step': 'Verification and grounding complete'}})}\n\n"

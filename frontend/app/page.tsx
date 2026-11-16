@@ -2,8 +2,9 @@
 
 import React, { useEffect, useRef } from "react";
 import Link from "next/link";
+import RidgelineDitherFooter from "@/components/ui/ridgeline-dither-footer";
 
-export default function HaldenLandingPage() {
+export default function TitanLandingPage() {
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -374,14 +375,15 @@ export default function HaldenLandingPage() {
       const scrollY = window.scrollY || window.pageYOffset || 0;
       const q = scrollY / innerH;
 
-      // Statement rise & reveal
+      // Statement rise & reveal (smoothly timed across all 4 lines)
       if (stmt) {
-        const s = clamp((q - 0.69) / 0.74);
+        const s = clamp((q - 0.65) / 0.55);
         const transY = 0.205 * Math.pow(1 - s, 2) * innerH;
         stmt.style.transform = `translateY(${transY.toFixed(2)}px)`;
 
-        const p = clamp((q - 0.56) / 2.03);
-        paint(stmtChars, p, 0.16, "#0b1d3a", "#3f7cff", "#ffffff");
+        // Calibrated reveal window ensuring lines 3 & 4 reveal gracefully and stay crisp
+        const p = clamp((q - 0.65) / 1.05);
+        paint(stmtChars, p, 0.22, "#0b1d3a", "#3f7cff", "#ffffff");
 
         // Nav CTA pill pop
         if (nav) {
@@ -393,12 +395,22 @@ export default function HaldenLandingPage() {
         }
       }
 
-      // Dark Split: headline & row & ship zoom
+      // Dark Split: headline & row & visual zoom
       if (split) {
         const splitRect = split.getBoundingClientRect();
         const splitTop = splitRect.top;
         const p2 = clamp((0.8 - splitTop / innerH) / 0.65);
         paint(h2Chars, p2, 0.35, "#ffffff", "#8fe6f4", "#5c6f92");
+
+        // Seamless exit fade for statement as dark split advances
+        if (stmt) {
+          if (splitTop / innerH < 0.85) {
+            const exitP = clamp((0.85 - splitTop / innerH) / 0.45);
+            stmt.style.opacity = (1 - exitP * 0.95).toFixed(3);
+          } else {
+            stmt.style.opacity = "1";
+          }
+        }
 
         if (row) {
           if (p2 > 0.92) {
@@ -785,12 +797,13 @@ export default function HaldenLandingPage() {
           right: 0;
           text-align: center;
           font-weight: 400;
-          font-size: clamp(20px, 2.8vw, 42px);
-          line-height: 1.16;
+          font-size: clamp(20px, 2.7vw, 40px);
+          line-height: 1.24;
           letter-spacing: -0.03em;
           color: var(--ink);
-          white-space: nowrap;
-          will-change: transform;
+          max-width: min(92vw, 1200px);
+          margin: 0 auto;
+          will-change: transform, opacity;
         }
 
         /* ── Dark Split Panel ── */
@@ -1061,7 +1074,7 @@ export default function HaldenLandingPage() {
               </div>
             </div>
 
-            {/* Cell 2: Vantage */}
+            {/* Cell 2: NEXUS */}
             <div className="logo-cell fade-up" style={{ "--d": "1.32s" } as React.CSSProperties}>
               <div
                 className="logo-item"
@@ -1073,7 +1086,7 @@ export default function HaldenLandingPage() {
                   letterSpacing: "0.02em",
                 }}
               >
-                <span>Vantage</span>
+                <span>NEXUS</span>
               </div>
             </div>
 
@@ -1099,20 +1112,20 @@ export default function HaldenLandingPage() {
               </div>
             </div>
 
-            {/* Cell 5: TIDELINE */}
+            {/* Cell 5: SENTINEL */}
             <div className="logo-cell row-2 fade-up" style={{ "--d": "1.42s" } as React.CSSProperties}>
               <div
                 className="logo-item"
                 style={{
-                  fontSize: "16px",
+                  fontSize: "15px",
                   fontWeight: 800,
-                  letterSpacing: "-0.02em",
+                  letterSpacing: "-0.01em",
                   border: "2px solid #3e4d68",
                   borderRadius: "4px",
                   padding: "2px 7px",
                 }}
               >
-                <span>TIDELINE</span>
+                <span>SENTINEL</span>
               </div>
             </div>
 
@@ -1177,7 +1190,7 @@ export default function HaldenLandingPage() {
             <div id="row">
               <h3>Enterprise teams</h3>
               <p>
-                <strong>Retrieve faster. Ground every answer. Stop chasing manifests.</strong> Titan runs
+                <strong>Retrieve faster. Ground every answer. Stop chasing unverified claims.</strong> Titan runs
                 multi-query retrieval, hybrid ranking, citation checks, and hallucination scoring — so your team stays focused on
                 throughput and verified answers.
               </p>
@@ -1187,11 +1200,73 @@ export default function HaldenLandingPage() {
           <div className="r">
             <img
               id="ship"
-              src="https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261029_050506_a830ff21-4c71-4272-bc39-b61cacb54463.png&w=1400&q=85"
-              alt="Aerial view of a container ship sailing up a misty fjord"
+              src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1400&auto=format&fit=crop"
+              alt="Titan enterprise AI neural knowledge network visualization"
             />
           </div>
         </section>
+
+        {/* ── 4. Ridgeline Dither Footer ── */}
+        <RidgelineDitherFooter
+          preset="night"
+          palette={{
+            paper: "#0a162b",
+            ink: "#f0f5ff",
+            muted: "#7e95b7",
+            line: "#1b2c4d",
+            heart: "#5b7cf0",
+            tones: ["#0a162b", "#0f2343", "#163462", "#214b87", "#3169b5", "#488ee4", "#7bb3f6"],
+          }}
+          seed={42}
+          ridges={6}
+          name="Titan"
+          brandHref="/"
+          tagline="Your AI teammate for enterprise knowledge — multi-query hybrid search, citation verification, and hallucination scoring."
+          columns={[
+            {
+              title: "Platform",
+              links: [
+                { label: "Hybrid Search" },
+                { label: "Citation Verification", badge: "Live" },
+                { label: "Hallucination Scoring" },
+                { label: "Multi-Query Engine" },
+              ],
+            },
+            {
+              title: "Solutions",
+              links: [
+                { label: "Enterprise RAG" },
+                { label: "Knowledge Workspaces" },
+                { label: "Document Ingestion" },
+                { label: "Security & Governance" },
+              ],
+            },
+            {
+              title: "Resources",
+              links: [
+                { label: "Documentation" },
+                { label: "Benchmark Report", badge: "Live" },
+                { label: "API Reference" },
+                { label: "System Status" },
+              ],
+            },
+            {
+              title: "Company",
+              links: [
+                { label: "About Titan" },
+                { label: "Security" },
+                { label: "Privacy Policy" },
+                { label: "Terms of Service" },
+              ],
+            },
+          ]}
+          socials={[
+            { icon: "github", href: "https://github.com" },
+            { icon: "linkedin", href: "https://linkedin.com" },
+            { icon: "x", href: "https://x.com" },
+          ]}
+          credit={{ label: "Titan Core Engineering", href: "/" }}
+        />
       </main>
     </>
   );
